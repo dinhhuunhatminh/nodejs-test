@@ -1,0 +1,64 @@
+name: Node.js CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-va-kiem-thu:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 1. Lấy mã nguồn về máy ảo
+      uses: actions/checkout@v4
+
+    - name: 2. Cài đặt môi trường Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: 3. Cài đặt các thư viện (Dependencies)
+      run: npm install
+
+    - name: 4. Chạy kiểm tra mã nguồn (Test)
+      run: npm test
+
+    - name: 5. Đóng gói ứng dụng thành Docker Image
+      run: docker build -t nodejs-getting-started:latest .
+
+    - name: 6. Quét lỗ hổng hệ thống (SCA - Trivy)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'nodejs-getting-started:latest' 
+        format: 'table' 
+        exit-code: '0'
+        ignore-unfixed: true 
+        vuln-type: 'os,library' 
+        severity: 'CRITICAL,HIGH'
+
+    # --- BẮT ĐẦU PHẦN MỚI THÊM VÀO (DAST) ---
+    - name: 7. Bật ứng dụng chạy ngầm (Làm mục tiêu giả định)
+      run: |
+        docker run -d -p 5006:5006 --name test-app nodejs-getting-started:latest
+        # Ép máy ảo đợi 10 giây để đảm bảo Node.js đã khởi động xong hoàn toàn
+        sleep 10 
+
+    - name: 8. Tấn công giả lập (DAST - OWASP ZAP)
+      uses: zaproxy/action-baseline@v0.12.0
+      with:
+        target: 'http://localhost:5006'
+        # Vẫn giữ nguyên tắc R&D: Chỉ cảnh báo (Audit) chứ không chặn đứng Pipeline
+        fail_action: false 
+    # --- KẾT THÚC PHẦN MỚI THÊM VÀO ---
+
+    - name: 9. Đăng nhập vào kho GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 10. Gắn thẻ và Đẩy Image lên kho
+      run: |
+        docker tag nodejs-getting-started:latest ghcr.io/${{ github.repository }}:latest
+        docker push ghcr.io/${{ github.repository }}:latest
