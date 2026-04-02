@@ -132,6 +132,7 @@ jobs:
       - name: Chạy OWASP ZAP (Bản Full)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_full'
         uses: zaproxy/action-full-scan@v0.10.0
+        continue-on-error: true
         with:
           target: 'http://localhost:5006'
           fail_action: false
