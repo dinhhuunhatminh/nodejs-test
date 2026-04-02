@@ -124,14 +124,14 @@ jobs:
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_quick'
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: 'http://localhost:8080' # Thường các template Nodejs mẫu chạy cổng 8080, nếu app bạn dùng 3000 thì sửa lại
+          target: 'http://localhost:5006' # Thường các template Nodejs mẫu chạy cổng 8080, nếu app bạn dùng 3000 thì sửa lại
           fail_action: false
 
       - name: Chạy OWASP ZAP (Bản Full)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_full'
         uses: zaproxy/action-full-scan@v0.10.0
         with:
-          target: 'http://localhost:8080'
+          target: 'http://localhost:5006'
           fail_action: false
 
       - name: Tính thời gian và Lấy số lượng lỗi

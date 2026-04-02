@@ -13,7 +13,7 @@ RUN npm install --only=production
 # Copy toàn bộ mã nguồn còn lại vào
 COPY . .
 
-# Mở cổng 5001 để bên ngoài có thể truy cập
+# Mở cổng 5006 để bên ngoài có thể truy cập
 EXPOSE 5006
 
 # Lệnh khởi động ứng dụng khi container chạy
