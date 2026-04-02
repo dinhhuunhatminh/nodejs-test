@@ -1,0 +1,62 @@
+{
+  "SAST": [
+    {
+      "id": "sonar_quick",
+      "base_time": 24.5,
+      "time_per_loc": 0.05,
+      "v_score": 25
+    },
+    {
+      "id": "sonar_deep",
+      "base_time": 60.0,
+      "time_per_loc": 0.2,
+      "v_score": 87
+    },
+    {
+      "id": "sast_skip",
+      "base_time": 0,
+      "time_per_loc": 0.0,
+      "v_score": 0
+    }
+  ],
+  "SCA": [
+    {
+      "id": "trivy_standard",
+      "base_time": 21.25,
+      "time_per_loc": 0.01,
+      "v_score": 32
+    },
+    {
+      "id": "trivy_deep",
+      "base_time": 33.0,
+      "time_per_loc": 0.05,
+      "v_score": 47
+    },
+    {
+      "id": "sca_skip",
+      "base_time": 0,
+      "time_per_loc": 0.0,
+      "v_score": 0
+    }
+  ],
+  "DAST": [
+    {
+      "id": "zap_quick",
+      "base_time": 120,
+      "time_per_loc": 0.1,
+      "v_score": 85
+    },
+    {
+      "id": "zap_full",
+      "base_time": 300,
+      "time_per_loc": 0.5,
+      "v_score": 100
+    },
+    {
+      "id": "dast_skip",
+      "base_time": 0,
+      "time_per_loc": 0.0,
+      "v_score": 0
+    }
+  ]
+}
