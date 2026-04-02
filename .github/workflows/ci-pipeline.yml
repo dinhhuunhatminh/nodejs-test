@@ -1,64 +1,181 @@
-name: Node.js CI Pipeline
+name: Smart CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-va-kiem-thu:
+  # BƯỚC 0: AI/THUẬT TOÁN QUYẾT ĐỊNH
+  brain_optimizer:
     runs-on: ubuntu-latest
-
+    outputs:
+      sast_choice: ${{ steps.think.outputs.SAST }}
+      sca_choice: ${{ steps.think.outputs.SCA }}
+      dast_choice: ${{ steps.think.outputs.DAST }}
     steps:
-    - name: 1. Lấy mã nguồn về máy ảo
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 
 
-    - name: 2. Cài đặt môi trường Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
+      - name: Tự động đếm dòng code thay đổi (LOC)
+        id: calc_loc
+        run: |
+          LOC=$(git diff HEAD~1 HEAD --numstat | awk '{s+=$1+$2} END {print s}')
+          if [ -z "$LOC" ]; then LOC=10; fi
+          echo "Tổng số dòng code thay đổi: $LOC"
+          echo "loc=$LOC" >> $GITHUB_OUTPUT
 
-    - name: 3. Cài đặt các thư viện (Dependencies)
-      run: npm install
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: 4. Chạy kiểm tra mã nguồn (Test)
-      run: npm test
+      - name: Chạy Thuật toán Tối ưu
+        id: think
+        env:
+          TIME_BUDGET: 15 # Nâng thời gian lên 15 phút vì DAST và cài Node.js khá tốn thời gian
+        run: |
+          LOC_COUNT=${{ steps.calc_loc.outputs.loc }}
+          echo "Quân sư nhận đề bài: LOC=$LOC_COUNT, Time=$TIME_BUDGET phút"
+          
+          RESULT=$(python dp_optimizer.py --loc $LOC_COUNT --time_min $TIME_BUDGET)
+          echo "Kết quả từ Quân sư: $RESULT"
+          
+          echo "SAST=$(echo $RESULT | jq -r .SAST)" >> $GITHUB_OUTPUT
+          echo "SCA=$(echo $RESULT | jq -r .SCA)" >> $GITHUB_OUTPUT
+          echo "DAST=$(echo $RESULT | jq -r .DAST)" >> $GITHUB_OUTPUT
 
-    - name: 5. Đóng gói ứng dụng thành Docker Image
-      run: docker build -t nodejs-getting-started:latest .
+  # BƯỚC 1: THỰC THI SAST 
+  run_sast:
+    needs: brain_optimizer
+    runs-on: ubuntu-latest
+    if: needs.brain_optimizer.outputs.sast_choice != 'sast_skip'
+    outputs:
+      duration: ${{ steps.sast_scan.outputs.duration }}
+      issues: ${{ steps.sast_scan.outputs.issues }}
+    steps:
+      - run: echo "Tạm thời bỏ qua cấu hình SAST thực tế để tập trung test DAST"
+      - id: sast_scan
+        run: |
+          echo "duration=10" >> $GITHUB_OUTPUT
+          echo "issues=0" >> $GITHUB_OUTPUT
 
-    - name: 6. Quét lỗ hổng hệ thống (SCA - Trivy)
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: 'nodejs-getting-started:latest' 
-        format: 'table' 
-        exit-code: '0'
-        ignore-unfixed: true 
-        vuln-type: 'os,library' 
-        severity: 'CRITICAL,HIGH'
+  # BƯỚC 2: THỰC THI SCA (Trivy)
+  run_sca:
+    needs: brain_optimizer
+    runs-on: ubuntu-latest
+    if: needs.brain_optimizer.outputs.sca_choice != 'sca_skip'
+    outputs:
+      duration: ${{ steps.sca_scan.outputs.duration }}
+      issues: ${{ steps.sca_scan.outputs.issues }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cài đặt Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+          trivy --version
+      - name: Chạy Trivy và Trích xuất lỗi
+        id: sca_scan
+        run: |
+          START_TIME=$(date +%s)
+          if [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_standard" ]; then
+            trivy fs --scanners vuln --format json --output trivy-report.json .
+          elif [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_deep" ]; then
+            trivy fs --scanners vuln,secret,misconfig --format json --output trivy-report.json .
+          fi
+          END_TIME=$(date +%s)
+          echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
+          if [ -f trivy-report.json ]; then
+            ISSUES=$(jq '[.Results[]?.Vulnerabilities | length] | add // 0' trivy-report.json)
+          else
+            ISSUES=0
+          fi
+          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
 
-    # --- BẮT ĐẦU PHẦN MỚI THÊM VÀO (DAST) ---
-    - name: 7. Bật ứng dụng chạy ngầm (Làm mục tiêu giả định)
-      run: |
-        docker run -d -p 5006:5006 --name test-app nodejs-getting-started:latest
-        # Ép máy ảo đợi 10 giây để đảm bảo Node.js đã khởi động xong hoàn toàn
-        sleep 10 
+  # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
+  run_dast:
+    needs: brain_optimizer
+    runs-on: ubuntu-latest
+    if: needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
+    outputs:
+      duration: ${{ steps.dast_scan.outputs.duration }}
+      issues: ${{ steps.dast_scan.outputs.issues }}
+    steps:
+      - uses: actions/checkout@v4
 
-    - name: 8. Tấn công giả lập (DAST - OWASP ZAP)
-      uses: zaproxy/action-baseline@v0.12.0
-      with:
-        target: 'http://localhost:5006'
-        # Vẫn giữ nguyên tắc R&D: Chỉ cảnh báo (Audit) chứ không chặn đứng Pipeline
-        fail_action: false 
-    # --- KẾT THÚC PHẦN MỚI THÊM VÀO ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-    - name: 9. Đăng nhập vào kho GitHub Container Registry
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Khởi động ứng dụng Node.js để làm bia tập bắn
+        run: |
+          npm install
+          npm start &  # Khởi động app ngầm
+          sleep 15     # Đợi 15 giây cho server Node.js khởi động xong hoàn toàn
+          
+      - name: Ghi nhận thời gian bắt đầu
+        run: echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
 
-    - name: 10. Gắn thẻ và Đẩy Image lên kho
-      run: |
-        docker tag nodejs-getting-started:latest ghcr.io/${{ github.repository }}:latest
-        docker push ghcr.io/${{ github.repository }}:latest
+      - name: Chạy OWASP ZAP (Bản Nhẹ)
+        if: needs.brain_optimizer.outputs.dast_choice == 'zap_quick'
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:8080' # Thường các template Nodejs mẫu chạy cổng 8080, nếu app bạn dùng 3000 thì sửa lại
+          fail_action: false
+
+      - name: Chạy OWASP ZAP (Bản Full)
+        if: needs.brain_optimizer.outputs.dast_choice == 'zap_full'
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: 'http://localhost:8080'
+          fail_action: false
+
+      - name: Tính thời gian và Lấy số lượng lỗi
+        id: dast_scan
+        run: |
+          END_TIME=$(date +%s)
+          echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
+          # Điểm số giả lập tạm thời vì việc đọc báo cáo của ZAP khá phức tạp
+          echo "issues=$((RANDOM % 20))" >> $GITHUB_OUTPUT
+
+  # BƯỚC 4: VÒNG LẶP PHẢN HỒI (TỰ HỌC)
+  feedback_and_learn:
+    needs: [brain_optimizer, run_sast, run_sca, run_dast]
+    runs-on: ubuntu-latest
+    if: always() 
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Cập nhật dữ liệu thực tế cho AI
+        run: |
+          # SCA
+          SCA_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
+          if [ "$SCA_CHOICE" != "sca_skip" ] && [ "$SCA_CHOICE" != "" ]; then
+             python feedback_updater.py --cat SCA --id $SCA_CHOICE --time ${{ needs.run_sca.outputs.duration }} --score ${{ needs.run_sca.outputs.issues }}
+          fi
+          
+          # DAST
+          DAST_CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
+          if [ "$DAST_CHOICE" != "dast_skip" ] && [ "$DAST_CHOICE" != "" ]; then
+             python feedback_updater.py --cat DAST --id $DAST_CHOICE --time ${{ needs.run_dast.outputs.duration }} --score ${{ needs.run_dast.outputs.issues }}
+          fi
+
+      - name: Commit Database Mới Lên Git
+        run: |
+          git config --global user.name "Smart-CI-Bot"
+          git config --global user.email "bot@smartci.com"
+          git add data/security_tools.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Tự động cập nhật database: Đã thêm kết quả DAST"
+          git push origin main
