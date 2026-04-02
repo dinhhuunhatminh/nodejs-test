@@ -120,6 +120,10 @@ jobs:
       - name: Ghi nhận thời gian bắt đầu
         run: echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
 
+      # THÊM BƯỚC NÀY ĐỂ FIX LỖI PERMISSION CỦA DOCKER
+      - name: Cấp quyền ghi cho thư mục làm việc của ZAP
+        run: chmod -R 777 .
+
       - name: Chạy OWASP ZAP (Bản Nhẹ)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_quick'
         uses: zaproxy/action-baseline@v0.12.0
