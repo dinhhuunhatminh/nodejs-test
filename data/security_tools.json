@@ -22,9 +22,9 @@
   "SCA": [
     {
       "id": "trivy_standard",
-      "base_time": 8.8125,
+      "base_time": 6.40625,
       "time_per_loc": 0.01,
-      "v_score": 10
+      "v_score": 6
     },
     {
       "id": "trivy_deep",
@@ -42,9 +42,9 @@
   "DAST": [
     {
       "id": "zap_quick",
-      "base_time": 191.25,
+      "base_time": 139.125,
       "time_per_loc": 0.1,
-      "v_score": 52
+      "v_score": 46
     },
     {
       "id": "zap_full",
