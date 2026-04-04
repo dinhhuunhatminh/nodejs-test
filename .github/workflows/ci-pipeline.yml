@@ -65,9 +65,10 @@ jobs:
 
   # BƯỚC 2: THỰC THI SCA (Trivy)
   run_sca:
-    needs: brain_optimizer
+    needs: [brain_optimizer, run_sast] # Nối đuôi chờ SAST chạy xong
     runs-on: ubuntu-latest
-    if: needs.brain_optimizer.outputs.sca_choice != 'sca_skip'
+    # Chạy nếu SAST không lỗi, không bị hủy, và AI không bắt skip SCA
+    if: always() && needs.run_sast.result != 'failure' && needs.run_sast.result != 'cancelled' && needs.brain_optimizer.outputs.sca_choice != 'sca_skip'
     outputs:
       duration: ${{ steps.sca_scan.outputs.duration }}
       issues: ${{ steps.sca_scan.outputs.issues }}
@@ -97,9 +98,10 @@ jobs:
 
   # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
   run_dast:
-    needs: brain_optimizer
+    needs: [brain_optimizer, run_sca] # Nối đuôi chờ SCA chạy xong
     runs-on: ubuntu-latest
-    if: needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
+    # Chạy nếu SCA không lỗi, không bị hủy, và AI không bắt skip DAST
+    if: always() && needs.run_sca.result != 'failure' && needs.run_sca.result != 'cancelled' && needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
     outputs:
       duration: ${{ steps.dast_scan.outputs.duration }}
       issues: ${{ steps.dast_scan.outputs.issues }}
