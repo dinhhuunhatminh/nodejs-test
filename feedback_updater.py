@@ -1,35 +1,34 @@
-import json
+import os
 import argparse
+from pymongo import MongoClient
 
-def update_knowledge(filepath, category, tool_id, actual_time, actual_score, alpha=0.5):
-    # Đọc dữ liệu cũ
-    with open(filepath, 'r') as f:
-        data = json.load(f)
-
-    # Cập nhật dữ liệu bằng công thức Tự học (Exponential Moving Average)
+def update_knowledge(category, tool_id, actual_time, actual_score, alpha=0.5):
+    client = MongoClient(os.environ['MONGO_URI'])
+    collection = client['devsecops']['tools']
+    
+    # Kéo dữ liệu hiện tại từ Cloud về
+    data = collection.find_one()
+    
+    # Cập nhật thông số bằng thuật toán EMA
     for tool in data[category]:
         if tool['id'] == tool_id:
-            old_time = tool['base_time']
-            old_score = tool['v_score']
-            
+            old_time = tool.get('base_time', actual_time)
+            old_score = tool.get('v_score', actual_score)
             tool['base_time'] = (alpha * actual_time) + ((1 - alpha) * old_time)
             tool['v_score'] = int((alpha * actual_score) + ((1 - alpha) * old_score))
-            
-            print(f"🔄 Đã học xong cho {tool_id}!")
-            print(f"   Thời gian: {old_time}s -> {tool['base_time']}s")
-            print(f"   Điểm lỗi: {old_score} -> {tool['v_score']}")
+            print(f"🔄 Đã ghi đè kết quả tự học của {tool_id} lên Cloud!")
             break
 
-    # Ghi đè lại file JSON
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=2)
+    # Đẩy toàn bộ dữ liệu mới lên lại MongoDB
+    collection.replace_one({'_id': data['_id']}, data)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cat", required=True, help="Danh mục (SAST, SCA, DAST)")
-    parser.add_argument("--id", required=True, help="ID công cụ (vd: sonar_quick)")
-    parser.add_argument("--time", type=float, required=True, help="Thời gian chạy thực tế (giây)")
-    parser.add_argument("--score", type=int, required=True, help="Số lỗi thực tế tìm được")
+    parser.add_argument("--cat", required=True)
+    parser.add_argument("--id", required=True)
+    parser.add_argument("--time", type=float, required=True)
+    parser.add_argument("--score", type=int, required=True)
     args = parser.parse_args()
 
-    update_knowledge("data/security_tools.json", args.cat, args.id, args.time, args.score)
+    # Bỏ đi việc truyền đường dẫn file, gọi thẳng hàm
+    update_knowledge(args.cat, args.id, args.time, args.score)

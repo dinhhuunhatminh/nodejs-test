@@ -1,10 +1,17 @@
+import os
 import json
 import argparse
 import itertools
+from pymongo import MongoClient
 
-def load_data(filepath):
-    with open(filepath, 'r') as f:
-        return json.load(f)
+def load_data():
+    print("Đang kết nối tới MongoDB...")
+    # Lấy chìa khóa kết nối từ biến môi trường
+    client = MongoClient(os.environ['MONGO_URI'])
+    collection = client['devsecops']['tools']
+    
+    # Lấy document đầu tiên, bỏ qua cột _id tự sinh của MongoDB
+    return collection.find_one({}, {'_id': 0})
 
 def calculate_time(tool, loc):
     return tool['base_time'] + (tool['time_per_loc'] * loc)
@@ -39,7 +46,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     time_budget_sec = args.time_min * 60
-    data = load_data("data/security_tools.json")
+    data = load_data()
     decision, estimated_time, total_score = optimize_pipeline(data, args.loc, time_budget_sec)
 
     print(json.dumps(decision))

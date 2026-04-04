@@ -33,10 +33,16 @@ jobs:
         with:
           python-version: '3.10'
 
+      # ---> MỚI: Cài đặt thư viện MongoDB
+      - name: Cài đặt thư viện MongoDB
+        run: pip install pymongo
+
       - name: Chạy Thuật toán Tối ưu
         id: think
         env:
-          TIME_BUDGET: 15 # Nâng thời gian lên 15 phút vì DAST và cài Node.js khá tốn thời gian
+          TIME_BUDGET: 15
+          # ---> MỚI: Truyền Secret vào Python
+          MONGO_URI: ${{ secrets.MONGO_URI }} 
         run: |
           LOC_COUNT=${{ steps.calc_loc.outputs.loc }}
           echo "Quân sư nhận đề bài: LOC=$LOC_COUNT, Time=$TIME_BUDGET phút"
@@ -47,7 +53,6 @@ jobs:
           echo "SAST=$(echo $RESULT | jq -r .SAST)" >> $GITHUB_OUTPUT
           echo "SCA=$(echo $RESULT | jq -r .SCA)" >> $GITHUB_OUTPUT
           echo "DAST=$(echo $RESULT | jq -r .DAST)" >> $GITHUB_OUTPUT
-
   # BƯỚC 1: THỰC THI SAST 
   run_sast:
     needs: brain_optimizer
@@ -162,12 +167,12 @@ jobs:
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
 
   # BƯỚC 4: VÒNG LẶP PHẢN HỒI (TỰ HỌC)
+  # BƯỚC 4: VÒNG LẶP PHẢN HỒI (TỰ HỌC)
   feedback_and_learn:
     needs: [brain_optimizer, run_sast, run_sca, run_dast]
     runs-on: ubuntu-latest
     if: always() 
-    permissions:
-      contents: write
+    # (Đã xóa permissions: contents: write vì không cần ghi lên Git nữa)
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -177,7 +182,14 @@ jobs:
         with:
           python-version: '3.10'
 
+      # ---> MỚI: Cài đặt thư viện MongoDB
+      - name: Cài đặt thư viện MongoDB
+        run: pip install pymongo
+
       - name: Cập nhật dữ liệu thực tế cho AI
+        env:
+          # ---> MỚI: Truyền Secret vào Python
+          MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
           # SCA
           SCA_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
@@ -191,10 +203,4 @@ jobs:
              python feedback_updater.py --cat DAST --id $DAST_CHOICE --time ${{ needs.run_dast.outputs.duration }} --score ${{ needs.run_dast.outputs.issues }}
           fi
 
-      - name: Commit Database Mới Lên Git
-        run: |
-          git config --global user.name "Smart-CI-Bot"
-          git config --global user.email "bot@smartci.com"
-          git add data/security_tools.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Tự động cập nhật database: Đã thêm kết quả DAST"
-          git push origin main
+      # ĐÃ XÓA TOÀN BỘ BƯỚC COMMIT LÊN GIT BẰNG "Smart-CI-Bot"
