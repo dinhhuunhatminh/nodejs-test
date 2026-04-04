@@ -35,7 +35,7 @@ jobs:
 
       # ---> MỚI: Cài đặt thư viện MongoDB
       - name: Cài đặt thư viện MongoDB
-        run: pip install pymongo
+        run: pip install pymongo certifi
 
       - name: Chạy Thuật toán Tối ưu
         id: think

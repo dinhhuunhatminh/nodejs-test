@@ -2,12 +2,13 @@ import os
 import json
 import argparse
 import itertools
+import certifi # <--- Thêm dòng này
 from pymongo import MongoClient
 
 def load_data():
     print("Đang kết nối tới MongoDB...")
     # Lấy chìa khóa kết nối từ biến môi trường
-    client = MongoClient(os.environ['MONGO_URI'])
+    client = MongoClient(os.environ['MONGO_URI'], tlsCAFile=certifi.where())
     collection = client['devsecops']['tools']
     
     # Lấy document đầu tiên, bỏ qua cột _id tự sinh của MongoDB
