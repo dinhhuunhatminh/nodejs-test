@@ -28,9 +28,9 @@
     },
     {
       "id": "trivy_deep",
-      "base_time": 13.5,
+      "base_time": 10.75,
       "time_per_loc": 0.05,
-      "v_score": 14
+      "v_score": 8
     },
     {
       "id": "sca_skip",
@@ -48,9 +48,9 @@
     },
     {
       "id": "zap_full",
-      "base_time": 264.0,
+      "base_time": 192.5,
       "time_per_loc": 0.5,
-      "v_score": 59
+      "v_score": 52
     },
     {
       "id": "dast_skip",
