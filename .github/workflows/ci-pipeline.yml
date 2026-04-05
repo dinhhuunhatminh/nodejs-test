@@ -88,9 +88,9 @@ jobs:
         run: |
           START_TIME=$(date +%s)
           if [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_standard" ]; then
-            trivy fs --scanners vuln --format json --output trivy-report.json //--exit-code 1 .
+            trivy fs --scanners vuln --format json --output trivy-report.json .
           elif [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_deep" ]; then
-            trivy fs --scanners vuln,secret,misconfig --format json --output trivy-report.json //--exit-code 1 .
+            trivy fs --scanners vuln,secret,misconfig --format json --output trivy-report.json .
           fi
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
