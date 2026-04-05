@@ -88,7 +88,7 @@ jobs:
         run: |
           START_TIME=$(date +%s)
           if [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_standard" ]; then
-            trivy fs --scanners vuln --format json --output trivy-report.json .
+            trivy fs --scanners vuln --format json --output trivy-report.json --exit-code 1 .
           elif [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_deep" ]; then
             trivy fs --scanners vuln,secret,misconfig --format json --output trivy-report.json .
           fi
@@ -136,8 +136,8 @@ jobs:
         uses: zaproxy/action-baseline@v0.14.0  # <-- NÂNG CẤP TỪ v0.12.0 LÊN v0.14.0
         with:
           target: 'http://localhost:5006'
-          fail_action: false
-          allow_issue_writing: false 
+          fail_action: true
+          allow_issue_writing: true 
 
       - name: Chạy OWASP ZAP (Bản Full)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_full'
