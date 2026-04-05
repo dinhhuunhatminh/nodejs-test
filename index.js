@@ -5,10 +5,6 @@ const port = process.env.PORT || 5006
 
 const app = express()
 
-// 🚨 MỒI NHỬ 1: Lộ lọt mã bí mật (Hardcoded Secret)
-// Tool phân tích tĩnh (SAST) sẽ đọc mã nguồn và bắt lỗi này ngay lập tức.
-// const AWS_SECRET_KEY = "AKIAIOSFODNN7EXAMPLE";
-
 app.use(express.static(path.join(__dirname, 'public')))
 app.set('views', path.join(__dirname, 'views'))
 app.set('view engine', 'ejs')
