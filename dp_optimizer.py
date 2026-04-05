@@ -6,7 +6,7 @@ import certifi # <--- Thêm dòng này
 from pymongo import MongoClient
 
 def load_data():
-    print("Đang kết nối tới MongoDB...")
+    # print("Đang kết nối tới MongoDB...")
     # Lấy chìa khóa kết nối từ biến môi trường
     client = MongoClient(os.environ['MONGO_URI'], tlsCAFile=certifi.where())
     collection = client['devsecops']['tools']
