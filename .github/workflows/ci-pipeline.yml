@@ -53,7 +53,7 @@ jobs:
           echo "SAST=$(echo $RESULT | jq -r .SAST)" >> $GITHUB_OUTPUT
           echo "SCA=$(echo $RESULT | jq -r .SCA)" >> $GITHUB_OUTPUT
           echo "DAST=$(echo $RESULT | jq -r .DAST)" >> $GITHUB_OUTPUT
-  # BƯỚC 1: THỰC THI SAST 
+  # BƯỚC 1: THỰC THI SAST (Semgrep)
   run_sast:
     needs: brain_optimizer
     runs-on: ubuntu-latest
@@ -62,11 +62,35 @@ jobs:
       duration: ${{ steps.sast_scan.outputs.duration }}
       issues: ${{ steps.sast_scan.outputs.issues }}
     steps:
-      - run: echo "Tạm thời bỏ qua cấu hình SAST thực tế để tập trung test DAST"
-      - id: sast_scan
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Cài đặt Semgrep
+        run: python -m pip install semgrep
+
+      - name: Chạy SAST và Trích xuất lỗi
+        id: sast_scan
         run: |
-          echo "duration=10" >> $GITHUB_OUTPUT
-          echo "issues=0" >> $GITHUB_OUTPUT
+          START_TIME=$(date +%s)
+          
+          # Định tuyến AI: Chọn độ sâu của luật quét
+          if [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_quick" ]; then
+            semgrep scan --config auto --json -o sast-report.json || true
+          elif [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_deep" ]; then
+            semgrep scan --config p/default --config p/security-audit --json -o sast-report.json || true
+          fi
+          
+          END_TIME=$(date +%s)
+          echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
+          
+          # Trích xuất số lượng lỗi từ file JSON
+          if [ -f sast-report.json ]; then
+            ISSUES=$(jq '.results | length' sast-report.json)
+          else
+            ISSUES=0
+          fi
+          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+          echo "SAST đã tìm thấy $ISSUES lỗi bảo mật."
 
   # BƯỚC 2: THỰC THI SCA (Trivy)
   run_sca:
@@ -168,7 +192,6 @@ jobs:
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
 
   # BƯỚC 4: VÒNG LẶP PHẢN HỒI (TỰ HỌC)
-  # BƯỚC 4: VÒNG LẶP PHẢN HỒI (TỰ HỌC)
   feedback_and_learn:
     needs: [brain_optimizer, run_sast, run_sca, run_dast]
     runs-on: ubuntu-latest
@@ -192,6 +215,11 @@ jobs:
           # ---> MỚI: Truyền Secret vào Python
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
+          # SAST
+          SAST_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
+          if [ "$SAST_CHOICE" != "sast_skip" ] && [ "$SAST_CHOICE" != "" ]; then
+            python feedback_updater.py --cat SAST --id $SAST_CHOICE --time ${{ needs.run_sast.outputs.duration }} --score ${{ needs.run_sast.outputs.issues }}
+          fi
           # SCA
           SCA_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
           if [ "$SCA_CHOICE" != "sca_skip" ] && [ "$SCA_CHOICE" != "" ]; then
