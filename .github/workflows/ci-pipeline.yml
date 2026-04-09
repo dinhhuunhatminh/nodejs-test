@@ -33,19 +33,19 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ---> MỚI: Cài đặt thư viện MongoDB
+      # Cài đặt thư viện MongoDB
       - name: Cài đặt thư viện MongoDB
         run: pip install pymongo certifi
 
       - name: Chạy Thuật toán Tối ưu
         id: think
         env:
-          # Ép thời gian và LOC ở đây để chạy kịch bản (đổi số ở đây)
+          # Ép thời gian và LOC ở đây để chạy kịch bản
           TIME_BUDGET: 1800
           LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
           MONGO_URI: ${{ secrets.MONGO_URI }} 
         run: |
-          echo "Quân sư nhận đề bài: LOC=$LOC_CHANGED, Time=$TIME_BUDGET giây"
+          echo "Đề bài: LOC=$LOC_CHANGED, Time=$TIME_BUDGET giây"
           
           # Chỉ cần gọi Python, script sẽ tự in bảng và truyền kết quả đi
           python dp_optimizer.py
@@ -147,22 +147,22 @@ jobs:
       - name: Ghi nhận thời gian bắt đầu
         run: echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
 
-      # THÊM BƯỚC NÀY ĐỂ FIX LỖI PERMISSION CỦA DOCKER
+      #FIX LỖI PERMISSION CỦA DOCKER
       - name: Cấp quyền ghi cho thư mục làm việc của ZAP
         run: chmod -R 777 .
 
       - name: Chạy OWASP ZAP (Bản Nhẹ)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_quick'
         uses: zaproxy/action-baseline@v0.14.0
-        continue-on-error: true # <--- THÊM DÒNG NÀY: Bỏ qua lỗi sập tiến trình
+        continue-on-error: true # Bỏ qua lỗi sập tiến trình
         with:
           target: 'http://localhost:5006'
-          fail_action: false # <--- SỬA THÀNH FALSE: Không đánh sập khi có cảnh báo
-          allow_issue_writing: false # <--- SỬA THÀNH FALSE: Đỡ tạo Issue rác trên GitHub
+          fail_action: false #FALSE: Không đánh sập khi có cảnh báo
+          allow_issue_writing: false #FALSE: Đỡ tạo Issue rác trên GitHub
 
       - name: Chạy OWASP ZAP (Bản Full)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_full'
-        uses: zaproxy/action-full-scan@v0.12.0  # <-- NÂNG CẤP TỪ v0.10.0 LÊN v0.12.0
+        uses: zaproxy/action-full-scan@v0.12.0  
         continue-on-error: true
         with:
           target: 'http://localhost:5006'
@@ -171,7 +171,7 @@ jobs:
 
       - name: Tính thời gian và Lấy số lượng lỗi thực tế
         id: dast_scan
-        # Lệnh này luôn chạy dù ZAP có báo fail ở trên
+        #luôn chạy dù ZAP có báo fail ở trên
         if: always() 
         run: |
           END_TIME=$(date +%s)
@@ -192,7 +192,6 @@ jobs:
     needs: [brain_optimizer, run_sast, run_sca, run_dast]
     runs-on: ubuntu-latest
     if: always() 
-    # (Đã xóa permissions: contents: write vì không cần ghi lên Git nữa)
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -202,13 +201,13 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ---> MỚI: Cài đặt thư viện MongoDB
+      #Cài đặt thư viện MongoDB
       - name: Cài đặt thư viện MongoDB
         run: pip install pymongo
 
       - name: Cập nhật dữ liệu thực tế cho AI
         env:
-          # ---> MỚI: Truyền Secret vào Python
+          #Truyền Secret vào Python
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
           # SAST
@@ -227,5 +226,3 @@ jobs:
           if [ "$DAST_CHOICE" != "dast_skip" ] && [ "$DAST_CHOICE" != "" ]; then
              python feedback_updater.py --cat DAST --id $DAST_CHOICE --time ${{ needs.run_dast.outputs.duration }} --score ${{ needs.run_dast.outputs.issues }}
           fi
-
-      # ĐÃ XÓA TOÀN BỘ BƯỚC COMMIT LÊN GIT BẰNG "Smart-CI-Bot"

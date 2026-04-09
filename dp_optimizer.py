@@ -8,8 +8,8 @@ def solve_knapsack(tools_list, time_limit, loc):
         tool['actual_time'] = tool['base_time'] + (tool['time_per_loc'] * loc)
     
     n = len(tools_list)
-    # Thuật toán Knapsack Dynamic Programming (hoặc Greedy nếu muốn nhanh)
-    # Ở đây dùng Greedy để ưu tiên tỉ lệ v_score/time (phù hợp với bài toán chọn bộ công cụ)
+    # Thuật toán Knapsack Dynamic Programming (hoặc Greedy)
+    #dùng Greedy để ưu tiên tỉ lệ v_score/time
     sorted_tools = sorted(tools_list, key=lambda x: x['v_score']/(x['actual_time'] if x['actual_time'] > 0 else 0.1), reverse=True)
     
     selected = []
@@ -32,10 +32,10 @@ def main():
     except:
         TIME_BUDGET, LOC_CHANGED = 300, 100
 
-    # THÊM DÒNG NÀY ĐỂ ÉP SỐ LIỆU TEST:
+    #ÉP SỐ LIỆU TEST:
     LOC_CHANGED = 5000  # Giả lập commit cực lớn để xem AI tính toán
 
-    # Kết nối MongoDB (Nhớ thêm tham số SSL nếu chạy local bị lỗi)
+    # Kết nối MongoDB 
     client = pymongo.MongoClient(os.environ.get('MONGO_URI'), tlsAllowInvalidCertificates=True)
     db = client['devsecops']
     data = db['tools'].find_one()
@@ -44,7 +44,7 @@ def main():
     summary_table = []
 
     # Chạy thuật toán cho từng tầng
-    # Chia budget: Mỗi tầng 1/3 (Hoặc bạn có thể tối ưu chia tổng cho cả 3)
+    # Chia budget: Mỗi tầng 1/3 
     layer_budget = TIME_BUDGET / 3
 
     for category in ['SAST', 'SCA', 'DAST']:
@@ -59,7 +59,7 @@ def main():
             results[category] = best_tool['id']
             summary_table.append([category, best_tool['id'], round(best_tool['actual_time'], 2), best_tool['v_score']])
 
-    # --- IN BÁO CÁO TRÌNH BÀY ---
+    #IN BÁO CÁO TRÌNH BÀY
     print("="*60)
     print(f"🚀 SMART PIPELINE DECISION REPORT")
     print("="*60)
@@ -77,7 +77,7 @@ def main():
     print(f"TOTAL: Time = {round(total_est_time, 2)}s / {TIME_BUDGET}s | Score = {total_est_score}")
     print("="*60)
 
-    # Xuất kết quả ra GitHub Output (Chuẩn mới)
+    # Xuất kết quả ra GitHub Output 
     github_output = os.environ.get('GITHUB_OUTPUT')
     if github_output:
         with open(github_output, 'a') as f:

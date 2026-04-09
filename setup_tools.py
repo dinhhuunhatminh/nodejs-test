@@ -1,8 +1,6 @@
 import pymongo
 import os
 
-# Thay bằng Connection String của bạn nếu chạy local, 
-# hoặc script sẽ tự lấy từ biến môi trường
 MONGO_URI = "mongodb+srv://mikazuki241125111_db_user:15102005Huuminnh!@cluster0.ozb6qg2.mongodb.net/?appName=Cluster0" 
 
 client = pymongo.MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
@@ -34,8 +32,7 @@ expanded_tools = {
     ]
 }
 
-# Thực hiện cập nhật
 collection.delete_many({}) # Xóa dữ liệu cũ
 collection.insert_one(expanded_tools)
 
-print("✅ Đã cập nhật 15 cấu hình công cụ mới lên MongoDB thành công!")
+print("Đã cập nhật 15 cấu hình công cụ mới lên MongoDB thành công!")

@@ -14,7 +14,7 @@ app.get('/', (req, res) => {
   res.render('pages/index')
 })
 
-// 🚨 MỒI NHỬ 2: Lỗ hổng XSS (Cross-Site Scripting)
+// MỒI NHỬ 2: Lỗ hổng XSS (Cross-Site Scripting)
 // Tool phân tích động (DAST - ZAP) sẽ gửi các payload độc hại vào biến 'name' 
 // để xem server có bị tấn công không.
 // app.get('/test-xss', (req, res) => {
@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
 //   res.send(`<h1>Hello ${user}</h1><p>Welcome to Smart DevSecOps!</p>`);
 // })
 
-// 🚨 MỒI NHỬ 3: Lỗ hổng SAST (Command Injection)
+// MỒI NHỬ 3: Lỗ hổng SAST (Command Injection)
 // Semgrep sẽ quét luồng dữ liệu tĩnh và phát hiện input của người dùng 
 // được đưa thẳng vào lõi hệ điều hành mà không qua bộ lọc.
 const { exec } = require('child_process');
