@@ -41,7 +41,7 @@ jobs:
         id: think
         env:
           # Ép thời gian và LOC ở đây để chạy kịch bản (đổi số ở đây)
-          TIME_BUDGET: 300 
+          TIME_BUDGET: 1800
           LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
           MONGO_URI: ${{ secrets.MONGO_URI }} 
         run: |
