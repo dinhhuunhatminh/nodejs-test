@@ -1,54 +1,83 @@
+import pymongo
 import os
-import json
-import argparse
-import itertools
-import certifi # <--- Thêm dòng này
-from pymongo import MongoClient
+import sys
 
-def load_data():
-    # zpip install pymongo dnspython 
-    # print("Đang kết nối tới MongoDB...")
-    # Lấy chìa khóa kết nối từ biến môi trường
-    client = MongoClient(os.environ['MONGO_URI'], tlsCAFile=certifi.where())
-    collection = client['devsecops']['tools']
+def solve_knapsack(tools_list, time_limit, loc):
+    # Tính toán thời gian thực tế dựa trên LOC cho từng công cụ
+    for tool in tools_list:
+        tool['actual_time'] = tool['base_time'] + (tool['time_per_loc'] * loc)
     
-    # Lấy document đầu tiên, bỏ qua cột _id tự sinh của MongoDB
-    return collection.find_one({}, {'_id': 0})
-
-def calculate_time(tool, loc):
-    return tool['base_time'] + (tool['time_per_loc'] * loc)
-
-def optimize_pipeline(data, loc, time_budget_sec):
-    categories = list(data.keys())
-    options_per_category = [data[cat] for cat in categories]
+    n = len(tools_list)
+    # Thuật toán Knapsack Dynamic Programming (hoặc Greedy nếu muốn nhanh)
+    # Ở đây dùng Greedy để ưu tiên tỉ lệ v_score/time (phù hợp với bài toán chọn bộ công cụ)
+    sorted_tools = sorted(tools_list, key=lambda x: x['v_score']/(x['actual_time'] if x['actual_time'] > 0 else 0.1), reverse=True)
     
-    best_combo = None
-    max_v_score = -1
-    best_time = 0
+    selected = []
+    total_time = 0
+    total_score = 0
+    
+    for tool in sorted_tools:
+        if total_time + tool['actual_time'] <= time_limit:
+            selected.append(tool)
+            total_time += tool['actual_time']
+            total_score += tool['v_score']
+            
+    return selected, total_time, total_score
 
-    for combo in itertools.product(*options_per_category):
-        total_time = sum(calculate_time(tool, loc) for tool in combo)
-        total_v_score = sum(tool['v_score'] for tool in combo)
+def main():
+    # Lấy tham số từ môi trường (GitHub Actions truyền vào) hoặc dùng mặc định để test
+    try:
+        TIME_BUDGET = int(os.environ.get('TIME_BUDGET', 300)) # Mặc định 5 phút
+        LOC_CHANGED = int(os.environ.get('LOC_CHANGED', 100)) # Mặc định 100 dòng
+    except:
+        TIME_BUDGET, LOC_CHANGED = 300, 100
 
-        if total_time <= time_budget_sec and total_v_score > max_v_score:
-            max_v_score = total_v_score
-            best_combo = combo
-            best_time = total_time
+    # Kết nối MongoDB (Nhớ thêm tham số SSL nếu chạy local bị lỗi)
+    client = pymongo.MongoClient(os.environ.get('MONGO_URI'), tlsAllowInvalidCertificates=True)
+    db = client['devsecops']
+    data = db['tools'].find_one()
 
-    if best_combo:
-        result = {categories[i]: tool['id'] for i, tool in enumerate(best_combo)}
-        return result, best_time, max_v_score
-    else:
-        return {"SAST": "sast_skip", "SCA": "sca_skip", "DAST": "dast_skip"}, 0, 0
+    results = {}
+    summary_table = []
+
+    # Chạy thuật toán cho từng tầng
+    # Chia budget: Mỗi tầng 1/3 (Hoặc bạn có thể tối ưu chia tổng cho cả 3)
+    layer_budget = TIME_BUDGET / 3
+
+    for category in ['SAST', 'SCA', 'DAST']:
+        selected, t, s = solve_knapsack(data[category], layer_budget, LOC_CHANGED)
+        # Nếu không chọn được gì (do budget quá thấp), mặc định chọn skip
+        if not selected:
+            results[category] = f"{category.lower()}_skip"
+            summary_table.append([category, "SKIP", 0, 0])
+        else:
+            # Chọn công cụ có v_score cao nhất trong danh sách thỏa mãn budget
+            best_tool = max(selected, key=lambda x: x['v_score'])
+            results[category] = best_tool['id']
+            summary_table.append([category, best_tool['id'], round(best_tool['actual_time'], 2), best_tool['v_score']])
+
+    # --- IN BÁO CÁO TRÌNH BÀY ---
+    print("="*60)
+    print(f"🚀 SMART PIPELINE DECISION REPORT")
+    print("="*60)
+    print(f"Input: LOC ={LOC_CHANGED} lines | Budget = {TIME_BUDGET}s")
+    print("-"*60)
+    print(f"{'LAYER':<10} | {'SELECTED TOOL':<20} | {'EST. TIME':<10} | {'SCORE'}")
+    print("-"*60)
+    total_est_time = 0
+    total_est_score = 0
+    for row in summary_table:
+        print(f"{row[0]:<10} | {row[1]:<20} | {row[2]:<10} | {row[3]}")
+        total_est_time += row[2]
+        total_est_score += row[3]
+    print("-"*60)
+    print(f"TOTAL: Time = {round(total_est_time, 2)}s / {TIME_BUDGET}s | Score = {total_est_score}")
+    print("="*60)
+
+    # Xuất kết quả ra GitHub Output
+    print(f"::set-output name=sast_choice::{results['SAST']}")
+    print(f"::set-output name=sca_choice::{results['SCA']}")
+    print(f"::set-output name=dast_choice::{results['DAST']}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Smart CI/CD Optimizer")
-    parser.add_argument("--loc", type=int, required=True, help="Số dòng code mới (Lines of Code)")
-    parser.add_argument("--time_min", type=int, required=True, help="Ngân sách thời gian (Phút)")
-    args = parser.parse_args()
-
-    time_budget_sec = args.time_min * 60
-    data = load_data()
-    decision, estimated_time, total_score = optimize_pipeline(data, args.loc, time_budget_sec)
-
-    print(json.dumps(decision))
+    main()
