@@ -8,8 +8,8 @@ def solve_knapsack(tools_list, time_limit, loc):
         tool['actual_time'] = tool['base_time'] + (tool['time_per_loc'] * loc)
     
     n = len(tools_list)
-    # Thuật toán Knapsack Dynamic Programming (hoặc Greedy)
-    #dùng Greedy để ưu tiên tỉ lệ v_score/time
+    #Thuật toán Knapsack Dynamic Programming (hoặc Greedy)
+    #Dùng Greedy để ưu tiên tỉ lệ v_score/time
     sorted_tools = sorted(tools_list, key=lambda x: x['v_score']/(x['actual_time'] if x['actual_time'] > 0 else 0.1), reverse=True)
     
     selected = []
