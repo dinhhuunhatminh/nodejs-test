@@ -40,19 +40,15 @@ jobs:
       - name: Chạy Thuật toán Tối ưu
         id: think
         env:
-          TIME_BUDGET: 300
-          # ---> MỚI: Truyền Secret vào Python
+          # Ép thời gian và LOC ở đây để chạy kịch bản (đổi số ở đây)
+          TIME_BUDGET: 300 
+          LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
           MONGO_URI: ${{ secrets.MONGO_URI }} 
         run: |
-          LOC_COUNT=${{ steps.calc_loc.outputs.loc }}
-          echo "Quân sư nhận đề bài: LOC=$LOC_COUNT, Time=$TIME_BUDGET phút"
+          echo "Quân sư nhận đề bài: LOC=$LOC_CHANGED, Time=$TIME_BUDGET giây"
           
-          RESULT=$(python dp_optimizer.py --loc $LOC_COUNT --time_min $TIME_BUDGET)
-          echo "Kết quả từ Quân sư: $RESULT"
-          
-          echo "SAST=$(echo $RESULT | jq -r .SAST)" >> $GITHUB_OUTPUT
-          echo "SCA=$(echo $RESULT | jq -r .SCA)" >> $GITHUB_OUTPUT
-          echo "DAST=$(echo $RESULT | jq -r .DAST)" >> $GITHUB_OUTPUT
+          # Chỉ cần gọi Python, script sẽ tự in bảng và truyền kết quả đi
+          python dp_optimizer.py
   # BƯỚC 1: THỰC THI SAST (Semgrep)
   run_sast:
     needs: brain_optimizer
