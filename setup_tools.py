@@ -5,7 +5,7 @@ import os
 # hoặc script sẽ tự lấy từ biến môi trường
 MONGO_URI = "mongodb+srv://mikazuki241125111_db_user:15102005Huuminnh!@cluster0.ozb6qg2.mongodb.net/?appName=Cluster0" 
 
-client = pymongo.MongoClient(MONGO_URI)
+client = pymongo.MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
 db = client['devsecops']
 collection = db['tools']
 
