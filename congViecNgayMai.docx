@@ -1,0 +1,7 @@
+1.chạy file dp với thuật toán cái túi và so sánh với thuật toán tham lam
+2.phân tích code của 2 thuật toán đang dùng
+3.chạy kịch bản để trình bày
+4.thử chuyển sang chế độ cho phép fail - fast
+5.phân tích được dataset, nếu cần thì cải tiến 
+6.thêm một số các mồi nhử thể hiện các lớp công cụ bắt lỗi, để ở chế độ failfast
+7.giải thích về file feedback và AI nằm ở đâu hoạt động thế nào
