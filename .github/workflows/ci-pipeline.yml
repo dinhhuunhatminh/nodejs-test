@@ -40,7 +40,7 @@ jobs:
       - name: Chạy Thuật toán Tối ưu
         id: think
         env:
-          TIME_BUDGET: 15
+          TIME_BUDGET: 300
           # ---> MỚI: Truyền Secret vào Python
           MONGO_URI: ${{ secrets.MONGO_URI }} 
         run: |
