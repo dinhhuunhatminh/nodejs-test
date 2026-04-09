@@ -77,10 +77,18 @@ def main():
     print(f"TOTAL: Time = {round(total_est_time, 2)}s / {TIME_BUDGET}s | Score = {total_est_score}")
     print("="*60)
 
-    # Xuất kết quả ra GitHub Output
-    print(f"::set-output name=sast_choice::{results['SAST']}")
-    print(f"::set-output name=sca_choice::{results['SCA']}")
-    print(f"::set-output name=dast_choice::{results['DAST']}")
+    # Xuất kết quả ra GitHub Output (Chuẩn mới)
+    github_output = os.environ.get('GITHUB_OUTPUT')
+    if github_output:
+        with open(github_output, 'a') as f:
+            f.write(f"sast_choice={results['SAST']}\n")
+            f.write(f"sca_choice={results['SCA']}\n")
+            f.write(f"dast_choice={results['DAST']}\n")
+    else:
+        # Fallback in ra màn hình nếu test trên máy tính cá nhân
+        print(f"sast_choice={results['SAST']}")
+        print(f"sca_choice={results['SCA']}")
+        print(f"dast_choice={results['DAST']}")
 
 if __name__ == "__main__":
     main()
