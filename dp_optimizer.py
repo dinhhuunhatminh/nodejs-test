@@ -24,6 +24,53 @@ def solve_knapsack(tools_list, time_limit, loc):
             
     return selected, total_time, total_score
 
+# def solve_knapsack(tools_list, time_limit, loc):
+#     # 1. Tính toán thời gian thực tế (Weight) và làm tròn thành số nguyên
+#     for tool in tools_list:
+#         tool['actual_time'] = int(tool['base_time'] + (tool['time_per_loc'] * loc))
+    
+#     n = len(tools_list)
+#     capacity = int(time_limit)
+    
+#     # 2. Khởi tạo Ma trận DP (Bảng phương án)
+#     # Kích thước: (n+1) hàng x (capacity+1) cột. Khởi tạo giá trị 0.
+#     dp = [[0 for _ in range(capacity + 1)] for _ in range(n + 1)]
+    
+#     # 3. Xây dựng bảng DP
+#     for i in range(1, n + 1):
+#         tool = tools_list[i-1]
+#         weight = tool['actual_time']
+#         value = tool['v_score']
+        
+#         for w in range(1, capacity + 1):
+#             if weight <= w:
+#                 # Nếu đủ thời gian để nhét công cụ này vào, chọn cái lớn hơn giữa:
+#                 # - Bỏ qua công cụ này (lấy giá trị ở ô trên)
+#                 # - Lấy công cụ này + phần giá trị tối ưu của thời gian còn lại
+#                 dp[i][w] = max(dp[i-1][w], dp[i-1][w-weight] + value)
+#             else:
+#                 # Nếu không đủ thời gian, kế thừa giá trị từ ô trên
+#                 dp[i][w] = dp[i-1][w]
+                
+#     # 4. Truy vết (Backtracking) để tìm ra những công cụ đã được chọn
+#     selected = []
+#     w = capacity
+#     total_time = 0
+#     total_score = dp[n][capacity] # Giá trị tối ưu nằm ở ô cuối cùng
+    
+#     for i in range(n, 0, -1):
+#         # Nếu giá trị thay đổi so với ô phía trên, tức là công cụ i đã được chọn
+#         if dp[i][w] != dp[i-1][w]:
+#             tool = tools_list[i-1]
+#             selected.append(tool)
+#             total_time += tool['actual_time']
+#             w -= tool['actual_time'] # Trừ đi ngân sách thời gian
+            
+#     # Lật ngược danh sách (để hiển thị theo thứ tự ngẫu nhiên ban đầu hoặc điểm cao nhất)
+#     selected.reverse()
+            
+#     return selected, total_time, total_score
+
 def main():
     # Lấy tham số từ môi trường (GitHub Actions truyền vào) hoặc dùng mặc định để test
     try:
