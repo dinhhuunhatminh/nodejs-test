@@ -32,6 +32,9 @@ def main():
     except:
         TIME_BUDGET, LOC_CHANGED = 300, 100
 
+    # THÊM DÒNG NÀY ĐỂ ÉP SỐ LIỆU TEST:
+    LOC_CHANGED = 5000  # Giả lập commit cực lớn để xem AI tính toán
+
     # Kết nối MongoDB (Nhớ thêm tham số SSL nếu chạy local bị lỗi)
     client = pymongo.MongoClient(os.environ.get('MONGO_URI'), tlsAllowInvalidCertificates=True)
     db = client['devsecops']
