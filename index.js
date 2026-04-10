@@ -2,7 +2,6 @@ const express = require('express')
 const path = require('path')
 
 const port = process.env.PORT || 5006
-
 const app = express()
 
 app.use(express.static(path.join(__dirname, 'public')))
@@ -24,34 +23,31 @@ app.get('/', (req, res) => {
 //     eval("console.log('User input: " + userInput + "')");
 // }
 
-// const { exec } = require('child_process');
+// === MỒI NHỬ CHO LỚP DAST (OWASP ZAP) ===
+// Tạo một form đăng nhập lỏng lẻo, thiếu Header bảo vệ và CSRF Token
+app.get('/login', (req, res) => {
+  res.send(`
+    <html>
+      <body>
+        <h1>Đăng nhập không an toàn</h1>
+        <form method="POST" action="/login">
+          <input type="text" name="username" placeholder="Username" />
+          <input type="password" name="password" placeholder="Password" />
+          <input type="submit" value="Login" />
+        </form>
+      </body>
+    </html>
+  `);
+});
 
-// app.get('/api/network-test', (req, res) => {
-//   const targetHost = req.query.host || 'google.com';
-  
-//   LỖI CHÍ MẠNG: Hacker có thể truyền vào host = "google.com; cat /etc/passwd" 
-//   để đánh cắp file hệ thống của server.
-//   exec(`ping -c 2 ${targetHost}`, (error, stdout, stderr) => {
-//     if (error) {
-//       return res.status(500).send(`Lỗi thực thi: ${error.message}`);
-//     }
-//     res.send(`<h1>Kết quả Ping:</h1><pre>${stdout}</pre>`);
-//   });
-// });
-
-// // Thêm một Hardcoded Secret giả để tăng điểm v_score
-// const INTERNAL_API_TOKEN = "jwt-secret-super-hardcoded-token-12345";
+app.post('/login', (req, res) => {
+  res.send('Login attempt received');
+});
 
 const server = app.listen(port, () => {
   console.log(`Listening on ${port}`)
 })
 
-// The number of seconds an idle Keep-Alive connection is kept open. This should be greater than the Heroku Router's
-// Keep-Alive idle timeout of 90 seconds:
-// - to ensure that the closing of idle connections is always initiated by the router and not the Node.js server
-// - to prevent a race condition if the router sends a request to the app just as Node.js is closing the connection
-// https://devcenter.heroku.com/articles/http-routing#keepalives
-// https://nodejs.org/api/http.html#serverkeepalivetimeout
 server.keepAliveTimeout = 95 * 1000
 
 process.on('SIGTERM', async () => {
