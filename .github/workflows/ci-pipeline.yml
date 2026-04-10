@@ -75,14 +75,12 @@ jobs:
           CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
           echo "Công cụ được AI chọn là: $CHOICE"
           
-          #Bao phủ các trường hợp từ MongoDB
           if [ "$CHOICE" == "semgrep_standard" ] || [ "$CHOICE" == "njsscan_quick" ]; then
-            semgrep scan --config auto --json -o sast-report.json || true
+            semgrep scan --config auto --exclude 'package*.json' --json -o sast-report.json || true
           elif [ "$CHOICE" == "sonar_deep" ] || [ "$CHOICE" == "codeql_full" ]; then
-            semgrep scan --config p/default --config p/security-audit --json -o sast-report.json || true
+            semgrep scan --config p/default --config p/security-audit --exclude 'package*.json' --json -o sast-report.json || true
           else
-            # Fallback: Quét mặc định nếu AI trả ra tên khác
-            semgrep scan --config auto --json -o sast-report.json || true
+            semgrep scan --config auto --exclude 'package*.json' --json -o sast-report.json || true
           fi
           
           END_TIME=$(date +%s)
@@ -142,7 +140,6 @@ jobs:
             exit 1
           fi
 
-  # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
   # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
   run_dast:
     needs: [brain_optimizer, run_sast, run_sca] 
