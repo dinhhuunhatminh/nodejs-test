@@ -72,12 +72,17 @@ jobs:
         id: sast_scan
         run: |
           START_TIME=$(date +%s)
+          CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
+          echo "Công cụ được AI chọn là: $CHOICE"
           
-          # Định tuyến AI: Chọn độ sâu của luật quét
-          if [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_quick" ]; then
+          # Fix lỗi gọi nhầm tên: Bao phủ các trường hợp từ MongoDB
+          if [ "$CHOICE" == "semgrep_standard" ] || [ "$CHOICE" == "njsscan_quick" ]; then
             semgrep scan --config auto --json -o sast-report.json || true
-          elif [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_deep" ]; then
+          elif [ "$CHOICE" == "sonar_deep" ] || [ "$CHOICE" == "codeql_full" ]; then
             semgrep scan --config p/default --config p/security-audit --json -o sast-report.json || true
+          else
+            # Fallback: Quét mặc định nếu AI trả ra tên khác
+            semgrep scan --config auto --json -o sast-report.json || true
           fi
           
           END_TIME=$(date +%s)
@@ -251,19 +256,19 @@ jobs:
           if [ -n "$S_CHOICE" ] && [ "$S_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ] && [ -n "$S_SCORE" ]; then
             python feedback_updater.py --cat SAST --id "$S_CHOICE" --time "$S_DUR" --score "$S_SCORE"
           else
-            echo "⚠️ Bỏ qua ghi nhận SAST (bị skip hoặc chưa kịp xuất dữ liệu)."
+            echo "Bỏ qua ghi nhận SAST (bị skip hoặc chưa kịp xuất dữ liệu)."
           fi
 
           # 3. Xử lý SCA
           if [ -n "$C_CHOICE" ] && [ "$C_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ] && [ -n "$C_SCORE" ]; then
              python feedback_updater.py --cat SCA --id "$C_CHOICE" --time "$C_DUR" --score "$C_SCORE"
           else
-             echo "⚠️ Bỏ qua ghi nhận SCA (bị skip do Fail-fast ở bước trước)."
+             echo "Bỏ qua ghi nhận SCA (bị skip do Fail-fast ở bước trước)."
           fi
 
           # 4. Xử lý DAST
           if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ] && [ -n "$D_SCORE" ]; then
              python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --score "$D_SCORE"
           else
-             echo "⚠️ Bỏ qua ghi nhận DAST (bị skip do Fail-fast ở bước trước)."
+             echo "Bỏ qua ghi nhận DAST (bị skip do Fail-fast ở bước trước)."
           fi
