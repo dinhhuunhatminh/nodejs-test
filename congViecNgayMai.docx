@@ -7,4 +7,13 @@
 7.giải thích về file feedback và AI nằm ở đâu hoạt động thế nào
 8.Thử chỉnh sửa code trong nodejs-getting-started thay để test
 + mồi nhử của SAST đặt trong file index.js 
+//thêm lỗi vào để test SAST
+// Cố tình lộ thông tin xác thực AWS và Database
+// const AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"; 
+// const DB_PASSWORD = "my-super-secret-password-123!";
+
+// // Cố tình dùng hàm nguy hiểm (lỗ hổng Injection)
+// function executeUserCommand(userInput) {
+//     eval("console.log('User input: " + userInput + "')");
+// }
 + mồi nhử của SCA là npm install lodash@4.17.10 - cài một phiên bản lodash cực kỳ cũ
