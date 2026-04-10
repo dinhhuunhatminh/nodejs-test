@@ -6,3 +6,5 @@
 6.thêm một số các mồi nhử thể hiện các lớp công cụ bắt lỗi, để ở chế độ failfast
 7.giải thích về file feedback và AI nằm ở đâu hoạt động thế nào
 8.Thử chỉnh sửa code trong nodejs-getting-started thay để test
++ mồi nhử của SAST đặt trong file index.js 
++ mồi nhử của SCA là npm install lodash@4.17.10 - cài một phiên bản lodash cực kỳ cũ

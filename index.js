@@ -31,20 +31,20 @@ app.get('/api/network-test', (req, res) => {
   
   // LỖI CHÍ MẠNG: Hacker có thể truyền vào host = "google.com; cat /etc/passwd" 
   // để đánh cắp file hệ thống của server.
-  exec(`ping -c 2 ${targetHost}`, (error, stdout, stderr) => {
-    if (error) {
-      return res.status(500).send(`Lỗi thực thi: ${error.message}`);
-    }
-    res.send(`<h1>Kết quả Ping:</h1><pre>${stdout}</pre>`);
-  });
-});
+//   exec(`ping -c 2 ${targetHost}`, (error, stdout, stderr) => {
+//     if (error) {
+//       return res.status(500).send(`Lỗi thực thi: ${error.message}`);
+//     }
+//     res.send(`<h1>Kết quả Ping:</h1><pre>${stdout}</pre>`);
+//   });
+// });
 
-// Thêm một Hardcoded Secret giả để tăng điểm v_score
-const INTERNAL_API_TOKEN = "jwt-secret-super-hardcoded-token-12345";
+// // Thêm một Hardcoded Secret giả để tăng điểm v_score
+// const INTERNAL_API_TOKEN = "jwt-secret-super-hardcoded-token-12345";
 
-const server = app.listen(port, () => {
-  console.log(`Listening on ${port}`)
-})
+// const server = app.listen(port, () => {
+//   console.log(`Listening on ${port}`)
+// })
 
 // The number of seconds an idle Keep-Alive connection is kept open. This should be greater than the Heroku Router's
 // Keep-Alive idle timeout of 90 seconds:
