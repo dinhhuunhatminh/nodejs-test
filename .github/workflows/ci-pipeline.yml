@@ -72,12 +72,17 @@ jobs:
         id: sast_scan
         run: |
           START_TIME=$(date +%s)
+          CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
+          echo "Công cụ được AI chọn là: $CHOICE"
           
-          # Định tuyến AI: Chọn độ sâu của luật quét
-          if [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_quick" ]; then
+          #Bao phủ các trường hợp từ MongoDB
+          if [ "$CHOICE" == "semgrep_standard" ] || [ "$CHOICE" == "njsscan_quick" ]; then
             semgrep scan --config auto --json -o sast-report.json || true
-          elif [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_deep" ]; then
+          elif [ "$CHOICE" == "sonar_deep" ] || [ "$CHOICE" == "codeql_full" ]; then
             semgrep scan --config p/default --config p/security-audit --json -o sast-report.json || true
+          else
+            # Fallback: Quét mặc định nếu AI trả ra tên khác
+            semgrep scan --config auto --json -o sast-report.json || true
           fi
           
           END_TIME=$(date +%s)
