@@ -88,6 +88,12 @@ jobs:
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
           echo "SAST đã tìm thấy $ISSUES lỗi bảo mật."
 
+          #KÍCH HOẠT FAIL-FAST
+          if [ "$ISSUES" -gt 0 ]; then
+            echo "Chặn đường ống ngay lập tức do SAST phát hiện lỗi!"
+            exit 1
+          fi
+
   # BƯỚC 2: THỰC THI SCA (Trivy)
   run_sca:
     needs: [brain_optimizer, run_sast] # Nối đuôi chờ SAST chạy xong
@@ -108,9 +114,9 @@ jobs:
         run: |
           START_TIME=$(date +%s)
           if [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_standard" ]; then
-            trivy fs --scanners vuln --format json --output trivy-report.json .
+            trivy fs --scanners vuln --format json --output trivy-report.json . || true #không sập luôn mà chờ log
           elif [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_deep" ]; then
-            trivy fs --scanners vuln,secret,misconfig --format json --output trivy-report.json .
+            trivy fs --scanners vuln,secret,misconfig --format json --output trivy-report.json . || true
           fi
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
@@ -120,6 +126,12 @@ jobs:
             ISSUES=0
           fi
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+
+          #KÍCH HOẠT FAIL FAST
+          if [ "$ISSUES" -gt 0 ]; then
+            echo "Phát hiện thư viện dính CVE"
+            exit 1
+          fi
 
   # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
   run_dast:
@@ -184,8 +196,14 @@ jobs:
              ISSUES=0
           fi
           
-          echo "ZAP đã tìm thấy $ISSUES cảnh báo!"
+          echo "ZAP đã tìm thấy $ISSUES cảnh báo"
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+
+          #KÍCH HOẠT FAIL FAST
+          if [ "$ISSUES" -gt 0 ]; then
+            echo "Ứng dụng có lỗ hổng khi chạy thực tế"
+            exit 1
+          fi
 
   # BƯỚC 4: VÒNG LẶP PHẢN HỒI (TỰ HỌC)
   feedback_and_learn:
@@ -206,23 +224,26 @@ jobs:
         run: pip install pymongo
 
       - name: Cập nhật dữ liệu thực tế cho AI
+        if: always()   #Luôn chạy dù đường ống bị sập ở bất kỳ đâu
         env:
-          #Truyền Secret vào Python
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
-          # SAST
+          # Lấy độ dài để tránh truyền biến rỗng khi bị Fail-fast
+          S_DUR="${{ needs.run_sast.outputs.duration }}"
+          C_DUR="${{ needs.run_sca.outputs.duration }}"
+          D_DUR="${{ needs.run_dast.outputs.duration }}"
+          
           SAST_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
-          if [ "$SAST_CHOICE" != "sast_skip" ] && [ "$SAST_CHOICE" != "" ]; then
-            python feedback_updater.py --cat SAST --id $SAST_CHOICE --time ${{ needs.run_sast.outputs.duration }} --score ${{ needs.run_sast.outputs.issues }}
-          fi
-          # SCA
-          SCA_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
-          if [ "$SCA_CHOICE" != "sca_skip" ] && [ "$SCA_CHOICE" != "" ]; then
-             python feedback_updater.py --cat SCA --id $SCA_CHOICE --time ${{ needs.run_sca.outputs.duration }} --score ${{ needs.run_sca.outputs.issues }}
+          if [ "$SAST_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ]; then
+            python feedback_updater.py --cat SAST --id $SAST_CHOICE --time $S_DUR --score ${{ needs.run_sast.outputs.issues }}
           fi
           
-          # DAST
+          SCA_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
+          if [ "$SCA_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ]; then
+             python feedback_updater.py --cat SCA --id $SCA_CHOICE --time $C_DUR --score ${{ needs.run_sca.outputs.issues }}
+          fi
+          
           DAST_CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
-          if [ "$DAST_CHOICE" != "dast_skip" ] && [ "$DAST_CHOICE" != "" ]; then
-             python feedback_updater.py --cat DAST --id $DAST_CHOICE --time ${{ needs.run_dast.outputs.duration }} --score ${{ needs.run_dast.outputs.issues }}
+          if [ "$DAST_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ]; then
+             python feedback_updater.py --cat DAST --id $DAST_CHOICE --time $D_DUR --score ${{ needs.run_dast.outputs.issues }}
           fi
