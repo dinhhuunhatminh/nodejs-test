@@ -2,7 +2,7 @@ import pymongo
 import os
 import sys
 
-# def solve_knapsack(tools_list, time_limit, loc):
+# def greedy(tools_list, time_limit, loc):
 #     # Tính toán thời gian thực tế dựa trên LOC cho từng công cụ
 #     for tool in tools_list:
 #         tool['actual_time'] = tool['base_time'] + (tool['time_per_loc'] * loc)
@@ -80,7 +80,7 @@ def main():
         TIME_BUDGET, LOC_CHANGED = 300, 100
 
     #ÉP SỐ LIỆU TEST:
-    LOC_CHANGED = 5000  # Giả lập commit cực lớn để xem AI tính toán
+    LOC_CHANGED = 5000  # Giả lập commit cực lớn 
 
     # Kết nối MongoDB 
     client = pymongo.MongoClient(os.environ.get('MONGO_URI'), tlsAllowInvalidCertificates=True)
