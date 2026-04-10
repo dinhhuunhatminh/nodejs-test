@@ -224,26 +224,42 @@ jobs:
         run: pip install pymongo
 
       - name: Cập nhật dữ liệu thực tế cho AI
-        if: always()   #Luôn chạy dù đường ống bị sập ở bất kỳ đâu
+        if: always()
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
-          # Lấy độ dài để tránh truyền biến rỗng khi bị Fail-fast
+          echo "Bắt đầu trích xuất dữ liệu để cập nhật cho AI..."
+          
+          # 1. Gom tất cả output vào biến Bash cục bộ để xử lý an toàn
+          S_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
           S_DUR="${{ needs.run_sast.outputs.duration }}"
+          S_SCORE="${{ needs.run_sast.outputs.issues }}"
+
+          C_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
           C_DUR="${{ needs.run_sca.outputs.duration }}"
+          C_SCORE="${{ needs.run_sca.outputs.issues }}"
+
+          D_CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
           D_DUR="${{ needs.run_dast.outputs.duration }}"
-          
-          SAST_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
-          if [ "$SAST_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ]; then
-            python feedback_updater.py --cat SAST --id $SAST_CHOICE --time $S_DUR --score ${{ needs.run_sast.outputs.issues }}
+          D_SCORE="${{ needs.run_dast.outputs.issues }}"
+
+          # 2. Xử lý SAST (Chỉ chạy khi có ID, không phải Skip, có thời gian và có điểm)
+          if [ -n "$S_CHOICE" ] && [ "$S_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ] && [ -n "$S_SCORE" ]; then
+            python feedback_updater.py --cat SAST --id "$S_CHOICE" --time "$S_DUR" --score "$S_SCORE"
+          else
+            echo "⚠️ Bỏ qua ghi nhận SAST (bị skip hoặc chưa kịp xuất dữ liệu)."
           fi
-          
-          SCA_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
-          if [ "$SCA_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ]; then
-             python feedback_updater.py --cat SCA --id $SCA_CHOICE --time $C_DUR --score ${{ needs.run_sca.outputs.issues }}
+
+          # 3. Xử lý SCA
+          if [ -n "$C_CHOICE" ] && [ "$C_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ] && [ -n "$C_SCORE" ]; then
+             python feedback_updater.py --cat SCA --id "$C_CHOICE" --time "$C_DUR" --score "$C_SCORE"
+          else
+             echo "⚠️ Bỏ qua ghi nhận SCA (bị skip do Fail-fast ở bước trước)."
           fi
-          
-          DAST_CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
-          if [ "$DAST_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ]; then
-             python feedback_updater.py --cat DAST --id $DAST_CHOICE --time $D_DUR --score ${{ needs.run_dast.outputs.issues }}
+
+          # 4. Xử lý DAST
+          if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ] && [ -n "$D_SCORE" ]; then
+             python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --score "$D_SCORE"
+          else
+             echo "⚠️ Bỏ qua ghi nhận DAST (bị skip do Fail-fast ở bước trước)."
           fi
