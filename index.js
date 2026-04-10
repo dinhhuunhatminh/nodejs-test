@@ -16,13 +16,14 @@ app.get('/', (req, res) => {
 
 //thêm lỗi vào để test
 // Cố tình lộ thông tin xác thực AWS và Database
-const AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"; 
-const DB_PASSWORD = "my-super-secret-password-123!";
+// const AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"; 
+// const DB_PASSWORD = "my-super-secret-password-123!";
 
-// Cố tình dùng hàm nguy hiểm (lỗ hổng Injection)
-function executeUserCommand(userInput) {
-    eval("console.log('User input: " + userInput + "')");
-}
+// // Cố tình dùng hàm nguy hiểm (lỗ hổng Injection)
+// function executeUserCommand(userInput) {
+//     eval("console.log('User input: " + userInput + "')");
+// }
+
 
 const { exec } = require('child_process');
 
