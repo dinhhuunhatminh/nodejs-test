@@ -108,7 +108,7 @@ def main():
 
     #IN BÁO CÁO TRÌNH BÀY
     print("="*60)
-    print(f"🚀 SMART PIPELINE DECISION REPORT")
+    print(f"SMART PIPELINE DECISION REPORT")
     print("="*60)
     print(f"Input: LOC ={LOC_CHANGED} lines | Budget = {TIME_BUDGET}s")
     print("-"*60)
