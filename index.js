@@ -23,27 +23,6 @@ app.get('/', (req, res) => {
 //     eval("console.log('User input: " + userInput + "')");
 // }
 
-// === MỒI NHỬ CHO LỚP DAST (OWASP ZAP) ===
-// Tạo một form đăng nhập lỏng lẻo, thiếu Header bảo vệ và CSRF Token
-// app.get('/login', (req, res) => {
-//   res.send(`
-//     <html>
-//       <body>
-//         <h1>Đăng nhập không an toàn</h1>
-//         <form method="POST" action="/login">
-//           <input type="text" name="username" placeholder="Username" />
-//           <input type="password" name="password" placeholder="Password" />
-//           <input type="submit" value="Login" />
-//         </form>
-//       </body>
-//     </html>
-//   `);
-// });
-
-// app.post('/login', (req, res) => {
-//   res.send('Login attempt received');
-// });
-
 const server = app.listen(port, () => {
   console.log(`Listening on ${port}`)
 })

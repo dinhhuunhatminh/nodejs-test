@@ -75,12 +75,13 @@ jobs:
           CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
           echo "Công cụ được AI chọn là: $CHOICE"
           
+          # Phân ranh giới rõ ràng: Cấm SAST quét file cấu hình thư viện và file cấu hình Pipeline
           if [ "$CHOICE" == "semgrep_standard" ] || [ "$CHOICE" == "njsscan_quick" ]; then
-            semgrep scan --config auto --exclude 'package*.json' --json -o sast-report.json || true
+            semgrep scan --config auto --exclude="package*.json" --exclude=".github" --json -o sast-report.json || true
           elif [ "$CHOICE" == "sonar_deep" ] || [ "$CHOICE" == "codeql_full" ]; then
-            semgrep scan --config p/default --config p/security-audit --exclude 'package*.json' --json -o sast-report.json || true
+            semgrep scan --config p/default --config p/security-audit --exclude="package*.json" --exclude=".github" --json -o sast-report.json || true
           else
-            semgrep scan --config auto --exclude 'package*.json' --json -o sast-report.json || true
+            semgrep scan --config auto --exclude="package*.json" --exclude=".github" --json -o sast-report.json || true
           fi
           
           END_TIME=$(date +%s)
