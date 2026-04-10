@@ -25,20 +25,20 @@ app.get('/', (req, res) => {
 // }
 
 
-const { exec } = require('child_process');
+//const { exec } = require('child_process');
 
-app.get('/api/network-test', (req, res) => {
-  const targetHost = req.query.host || 'google.com';
+// app.get('/api/network-test', (req, res) => {
+//   const targetHost = req.query.host || 'google.com';
   
-  // LỖI CHÍ MẠNG: Hacker có thể truyền vào host = "google.com; cat /etc/passwd" 
-  // để đánh cắp file hệ thống của server.
-  exec(`ping -c 2 ${targetHost}`, (error, stdout, stderr) => {
-    if (error) {
-      return res.status(500).send(`Lỗi thực thi: ${error.message}`);
-    }
-    res.send(`<h1>Kết quả Ping:</h1><pre>${stdout}</pre>`);
-  });
-});
+//   // LỖI CHÍ MẠNG: Hacker có thể truyền vào host = "google.com; cat /etc/passwd" 
+//   // để đánh cắp file hệ thống của server.
+//   exec(`ping -c 2 ${targetHost}`, (error, stdout, stderr) => {
+//     if (error) {
+//       return res.status(500).send(`Lỗi thực thi: ${error.message}`);
+//     }
+//     res.send(`<h1>Kết quả Ping:</h1><pre>${stdout}</pre>`);
+//   });
+// });
 
 // Thêm một Hardcoded Secret giả để tăng điểm v_score
 const INTERNAL_API_TOKEN = "jwt-secret-super-hardcoded-token-12345";
