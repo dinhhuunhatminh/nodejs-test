@@ -14,17 +14,16 @@ app.get('/', (req, res) => {
   res.render('pages/index')
 })
 
-// MỒI NHỬ 2: Lỗ hổng XSS (Cross-Site Scripting)
-// Tool phân tích động (DAST - ZAP) sẽ gửi các payload độc hại vào biến 'name' 
-// để xem server có bị tấn công không.
-// app.get('/test-xss', (req, res) => {
-//   const user = req.query.name || "Guest";
-//   res.send(`<h1>Hello ${user}</h1><p>Welcome to Smart DevSecOps!</p>`);
-// })
+//thêm lỗi vào để test
+// Cố tình lộ thông tin xác thực AWS và Database
+const AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"; 
+const DB_PASSWORD = "my-super-secret-password-123!";
 
-// MỒI NHỬ 3: Lỗ hổng SAST (Command Injection)
-// Semgrep sẽ quét luồng dữ liệu tĩnh và phát hiện input của người dùng 
-// được đưa thẳng vào lõi hệ điều hành mà không qua bộ lọc.
+// Cố tình dùng hàm nguy hiểm (lỗ hổng Injection)
+function executeUserCommand(userInput) {
+    eval("console.log('User input: " + userInput + "')");
+}
+
 const { exec } = require('child_process');
 
 app.get('/api/network-test', (req, res) => {
