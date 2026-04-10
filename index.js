@@ -42,9 +42,9 @@ app.get('/api/network-test', (req, res) => {
 // // Thêm một Hardcoded Secret giả để tăng điểm v_score
 // const INTERNAL_API_TOKEN = "jwt-secret-super-hardcoded-token-12345";
 
-// const server = app.listen(port, () => {
-//   console.log(`Listening on ${port}`)
-// })
+const server = app.listen(port, () => {
+  console.log(`Listening on ${port}`)
+})
 
 // The number of seconds an idle Keep-Alive connection is kept open. This should be greater than the Heroku Router's
 // Keep-Alive idle timeout of 90 seconds:
