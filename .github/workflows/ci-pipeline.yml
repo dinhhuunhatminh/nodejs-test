@@ -143,11 +143,12 @@ jobs:
           fi
 
   # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
+  # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
   run_dast:
-    needs: [brain_optimizer, run_sca] # Nối đuôi chờ SCA chạy xong
+    needs: [brain_optimizer, run_sast, run_sca] 
     runs-on: ubuntu-latest
-    # Chạy nếu SCA không lỗi, không bị hủy, và AI không bắt skip DAST
-    if: always() && needs.run_sca.result != 'failure' && needs.run_sca.result != 'cancelled' && needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
+    # Bắt buộc CẢ SAST và SCA đều không được phép Failure thì mới chạy
+    if: always() && needs.run_sast.result != 'failure' && needs.run_sca.result != 'failure' && needs.run_sast.result != 'cancelled' && needs.run_sca.result != 'cancelled' && needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
     outputs:
       duration: ${{ steps.dast_scan.outputs.duration }}
       issues: ${{ steps.dast_scan.outputs.issues }}
