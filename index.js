@@ -37,7 +37,7 @@ app.get('/api/network-test', (req, res) => {
 //     }
 //     res.send(`<h1>Kết quả Ping:</h1><pre>${stdout}</pre>`);
 //   });
-// });
+});
 
 // // Thêm một Hardcoded Secret giả để tăng điểm v_score
 // const INTERNAL_API_TOKEN = "jwt-secret-super-hardcoded-token-12345";
