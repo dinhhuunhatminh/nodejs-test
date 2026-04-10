@@ -16,7 +16,7 @@ def update_knowledge(category, tool_id, actual_time, actual_score, alpha=0.5):
             old_score = tool.get('v_score', actual_score)
             tool['base_time'] = (alpha * actual_time) + ((1 - alpha) * old_time)
             tool['v_score'] = int((alpha * actual_score) + ((1 - alpha) * old_score))
-            print(f"🔄 Đã ghi đè kết quả tự học của {tool_id} lên Cloud!")
+            print(f"Đã ghi đè kết quả tự học của {tool_id} lên Cloud!")
             break
 
     # Đẩy toàn bộ dữ liệu mới lên lại MongoDB

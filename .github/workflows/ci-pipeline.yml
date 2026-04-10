@@ -6,12 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
-# Đặt biến môi trường để ép các action JavaScript chạy trên Node.js 24, tránh lỗi do Node 18 cũ
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # BƯỚC 0: AI/THUẬT TOÁN QUYẾT ĐỊNH
+  # BƯỚC 0: THUẬT TOÁN QUYẾT ĐỊNH
   brain_optimizer:
     runs-on: ubuntu-latest
     outputs:
