@@ -40,18 +40,30 @@ jobs:
       - name: Cài đặt thư viện MongoDB
         run: pip install pymongo certifi
 
+      # - name: Chạy Thuật toán Tối ưu
+      #   id: think
+      #   env:
+      #     # Ép thời gian và LOC ở đây để chạy kịch bản
+      #     TIME_BUDGET: 1800
+      #     LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
+      #     MONGO_URI: ${{ secrets.MONGO_URI }} 
+      #   run: |
+      #     echo "Đề bài: LOC=$LOC_CHANGED, Time=$TIME_BUDGET giây"
+          
+      #     # Chỉ cần gọi Python, script sẽ tự in bảng và truyền kết quả đi
+      #     python dp_optimizer.py
+      
       - name: Chạy Thuật toán Tối ưu
-        id: think
         env:
-          # Ép thời gian và LOC ở đây để chạy kịch bản
           TIME_BUDGET: 1800
           LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
-          MONGO_URI: ${{ secrets.MONGO_URI }} 
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          # Truyền các lớp được chọn từ giao diện (nếu bạn đã cấu hình input)
+          SELECTED_LAYERS: ${{ github.event.inputs.selected_layers || 'SAST,SCA,DAST' }}
         run: |
-          echo "Đề bài: LOC=$LOC_CHANGED, Time=$TIME_BUDGET giây"
-          
-          # Chỉ cần gọi Python, script sẽ tự in bảng và truyền kết quả đi
-          python dp_optimizer.py
+          # Nếu có input chọn bản nâng cao thì chạy file _2, không thì chạy file gốc
+          python dp_optimizer_2.py
+
   # BƯỚC 1: THỰC THI SAST (Semgrep)
   run_sast:
     needs: brain_optimizer
