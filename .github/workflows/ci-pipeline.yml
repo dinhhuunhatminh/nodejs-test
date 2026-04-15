@@ -5,6 +5,14 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  #cho phép chọn lớp bảo mật muốn chạy thủ công từ giao diện GitHub
+  workflow_dispatch:
+    inputs:
+      selected_layers:
+        description: 'Chọn các lớp bảo mật muốn chạy (VD: SAST hoặc SAST,SCA)'
+        required: true
+        default: 'SAST,SCA,DAST'
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
