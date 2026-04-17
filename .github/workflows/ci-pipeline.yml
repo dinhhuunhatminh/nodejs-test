@@ -113,32 +113,54 @@ jobs:
       issues: ${{ steps.sca_scan.outputs.issues }}
     steps:
       - uses: actions/checkout@v4
+      
+      # Thêm Setup Node.js để npm_audit hoạt động
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
       - name: Cài đặt Trivy
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
-      - name: Chạy Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+        
+      - name: Chạy Công cụ SCA và Trích xuất lỗi
         id: sca_scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} # Cần cho Snyk
         run: |
           START_TIME=$(date +%s)
           CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
+          ISSUES=0
           
+          echo "AI đã chọn công cụ SCA: $CHOICE"
+
           if [ "$CHOICE" == "trivy_standard" ]; then
             trivy fs --scanners vuln --format json --output report.json . || true
+            [ -f report.json ] && ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) | length] | add // 0' report.json)
+            
           elif [ "$CHOICE" == "trivy_deep" ]; then
             trivy fs --scanners vuln,secret,misconfig --format json --output report.json . || true
+            [ -f report.json ] && ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) + (.Misconfigurations // []) + (.Secrets // []) | length] | add // 0' report.json)
+            
+          elif [ "$CHOICE" == "npm_audit" ]; then
+            npm install --package-lock-only || true
+            npm audit --json > report.json || true
+            [ -f report.json ] && ISSUES=$(jq '.metadata.vulnerabilities.total // 0' report.json)
+            
+          elif [ "$CHOICE" == "snyk_advanced" ]; then
+            npm install -g snyk
+            snyk test --all-projects --json > report.json || true
+            [ -f report.json ] && ISSUES=$(jq 'if type == "array" then [.[].uniqueCount] | add else .uniqueCount end' report.json)
           fi
           
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
-          
-          if [ -f report.json ]; then
-            ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) + (.Misconfigurations // []) + (.Secrets // []) | length] | add // 0' report.json)
-          else
-            ISSUES=0
+          echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
+          echo "SCA ($CHOICE) tìm thấy ${ISSUES:-0} lỗi."
+
+          if [ "${ISSUES:-0}" -gt 0 ]; then 
+            echo "Phát hiện thư viện dính lỗi bảo mật!"
+            exit 1
           fi
-          
-          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
-          if [ "$ISSUES" -gt 0 ]; then exit 1; fi
 
   run_dast:
     needs: [brain_optimizer]
