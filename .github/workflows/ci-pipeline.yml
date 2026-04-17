@@ -20,7 +20,7 @@ jobs:
   brain_optimizer:
     runs-on: ubuntu-latest
     outputs:
-      # SỬA LỖI 1: Lấy đúng tên biến từ Python xuất ra
+      #Lấy đúng tên biến từ Python xuất ra
       sast_choice: ${{ steps.think.outputs.sast_choice }}
       sca_choice: ${{ steps.think.outputs.sca_choice }}
       dast_choice: ${{ steps.think.outputs.dast_choice }}
@@ -233,12 +233,37 @@ jobs:
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
-          # Dữ liệu truyền nguyên vẹn xuống Feedback Updater
+          echo "==== DỮ LIỆU THÔ TRÍCH XUẤT TỪ GITHUB ACTIONS ===="
+          # 1. Lấy dữ liệu SAST
           S_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
           S_DUR="${{ needs.run_sast.outputs.duration }}"
           S_SCORE="${{ needs.run_sast.outputs.issues }}"
+          echo "SAST: ID=$S_CHOICE | Time=$S_DUR | Score=$S_SCORE"
 
+          # 2. Lấy dữ liệu SCA
+          C_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
+          C_DUR="${{ needs.run_sca.outputs.duration }}"
+          C_SCORE="${{ needs.run_sca.outputs.issues }}"
+          echo "SCA : ID=$C_CHOICE | Time=$C_DUR | Score=$C_SCORE"
+
+          # 3. Lấy dữ liệu DAST
+          D_CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
+          D_DUR="${{ needs.run_dast.outputs.duration }}"
+          D_SCORE="${{ needs.run_dast.outputs.issues }}"
+          echo "DAST: ID=$D_CHOICE | Time=$D_DUR | Score=$D_SCORE"
+          echo "==================================================="
+
+          # Cập nhật SAST
           if [ -n "$S_CHOICE" ] && [ "$S_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ] && [ -n "$S_SCORE" ]; then
             python feedback_updater.py --cat SAST --id "$S_CHOICE" --time "$S_DUR" --score "$S_SCORE"
           fi
-          # (Làm tương tự cho SCA và DAST nếu chúng được chạy)
+          
+          # Cập nhật SCA
+          if [ -n "$C_CHOICE" ] && [ "$C_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ] && [ -n "$C_SCORE" ]; then
+            python feedback_updater.py --cat SCA --id "$C_CHOICE" --time "$C_DUR" --score "$C_SCORE"
+          fi
+          
+          # Cập nhật DAST
+          if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ] && [ -n "$D_SCORE" ]; then
+            python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --score "$D_SCORE"
+          fi
