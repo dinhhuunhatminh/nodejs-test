@@ -38,40 +38,25 @@ jobs:
           import os
           import google.generativeai as genai
 
-          # Khởi tạo kết nối với Gemini
-          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-          model = genai.GenerativeModel('gemini-pro')
-
-          # Đọc đoạn code vừa thay đổi
-          with open('pr_diff.txt', 'r', encoding='utf-8') as f:
-              diff = f.read()
-
-          if len(diff.strip()) < 10:
-              with open('review.txt', 'w', encoding='utf-8') as f:
-                  f.write('👍 Không có thay đổi mã nguồn nào đáng kể để review.')
-              exit(0)
-
-          # Nhồi Prompt (Chỉ thị) cho AI
-          prompt = '''Nhiệm vụ của bạn là làm một AI Reviewer lão luyện. Hãy đọc đoạn code Git Diff sau.
-          Tìm các lỗi logic, lỗ hổng bảo mật, hoặc code smell.
-          Trả lời bằng Tiếng Việt, ngắn gọn, súc tích và chuyên nghiệp.
-          Cấu trúc comment:
-          🚨 **[Mức độ rủi ro: Cao/Trung bình/Thấp] - [Phân loại: Bảo mật/Hiệu suất/Logic]**
-          - **Nguyên nhân**: ...
-          - **Đề xuất sửa**: (Viết mã an toàn vào block code)
-          Nếu code hoàn toàn an toàn, hãy khen ngợi ngắn gọn.
-          
-          Đoạn code Diff:
-          ''' + diff
-
           try:
-              # Gọi API lấy câu trả lời
-              response = model.generate_content(prompt)
+              genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+              
+              # Yêu cầu Google liệt kê toàn bộ model khả dụng
+              models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+              
+              if models:
+                  text = '🔍 **Danh sách model Google cho phép API Key này sử dụng:**\n\n'
+                  for m in models:
+                      text += f'- \`{m}\`\n'
+                  text += '\n💡 *Hãy copy một tên trong danh sách trên để thay vào code bot AI nhé!*'
+              else:
+                  text = '⚠️ API Key kết nối thành công nhưng không có quyền dùng model nào.'
+                  
               with open('review.txt', 'w', encoding='utf-8') as f:
-                  f.write(response.text)
+                  f.write(text)
           except Exception as e:
               with open('review.txt', 'w', encoding='utf-8') as f:
-                  f.write(f'⚠️ Lỗi khi gọi Gemini API: {str(e)}')
+                  f.write(f'⚠️ Lỗi Debug: {str(e)}')
           "
 
       - name: 💬 Bắn Comment vào giao diện GitHub
