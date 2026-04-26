@@ -5,7 +5,6 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  #cho phép chọn lớp bảo mật muốn chạy thủ công từ giao diện GitHub
   workflow_dispatch:
     inputs:
       selected_layers:
@@ -14,17 +13,15 @@ on:
         default: 'SAST,SCA,DAST'
         type: string
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+# Đã xóa biến FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 để loại bỏ cảnh báo rác
 
 jobs:
-  # BƯỚC 0: THUẬT TOÁN QUYẾT ĐỊNH
   brain_optimizer:
     runs-on: ubuntu-latest
     outputs:
-      sast_choice: ${{ steps.think.outputs.SAST }}
-      sca_choice: ${{ steps.think.outputs.SCA }}
-      dast_choice: ${{ steps.think.outputs.DAST }}
+      sast_choice: ${{ steps.think.outputs.sast_choice }}
+      sca_choice: ${{ steps.think.outputs.sca_choice }}
+      dast_choice: ${{ steps.think.outputs.dast_choice }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -44,35 +41,19 @@ jobs:
         with:
           python-version: '3.10'
 
-      # Cài đặt thư viện MongoDB
       - name: Cài đặt thư viện MongoDB
         run: pip install pymongo certifi
-
-      # - name: Chạy Thuật toán Tối ưu
-      #   id: think
-      #   env:
-      #     # Ép thời gian và LOC ở đây để chạy kịch bản
-      #     TIME_BUDGET: 1800
-      #     LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
-      #     MONGO_URI: ${{ secrets.MONGO_URI }} 
-      #   run: |
-      #     echo "Đề bài: LOC=$LOC_CHANGED, Time=$TIME_BUDGET giây"
-          
-      #     # Chỉ cần gọi Python, script sẽ tự in bảng và truyền kết quả đi
-      #     python dp_optimizer.py
       
       - name: Chạy Thuật toán Tối ưu
+        id: think
         env:
           TIME_BUDGET: 1800
           LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
-          # Truyền các lớp được chọn từ giao diện (nếu bạn đã cấu hình input)
           SELECTED_LAYERS: ${{ github.event.inputs.selected_layers || 'SAST,SCA,DAST' }}
         run: |
-          # Nếu có input chọn bản nâng cao thì chạy file _2, không thì chạy file gốc
           python dp_optimizer_2.py
 
-  # BƯỚC 1: THỰC THI SAST (Semgrep)
   run_sast:
     needs: brain_optimizer
     runs-on: ubuntu-latest
@@ -92,7 +73,6 @@ jobs:
         run: |
           START_TIME=$(date +%s)
           
-          # Định tuyến AI: Chọn độ sâu của luật quét
           if [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_quick" ]; then
             semgrep scan --config auto --json -o sast-report.json || true
           elif [ "${{ needs.brain_optimizer.outputs.sast_choice }}" == "sonar_deep" ]; then
@@ -102,25 +82,23 @@ jobs:
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           
-          # Trích xuất số lượng lỗi từ file JSON
           if [ -f sast-report.json ]; then
             ISSUES=$(jq '.results | length' sast-report.json)
           else
             ISSUES=0
           fi
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
-          echo "SAST đã tìm thấy $ISSUES lỗi bảo mật."
 
-          #KÍCH HOẠT FAIL-FAST
+          # THÊM ANNOTATIONS CHO GIAO DIỆN
           if [ "$ISSUES" -gt 0 ]; then
-            echo "Chặn đường ống ngay lập tức do SAST phát hiện lỗi!"
+            echo "::error::🚨 SAST: Chặn đường ống! Phát hiện $ISSUES lỗi bảo mật."
             exit 1
+          else
+            echo "::notice::✅ SAST: Tuyệt vời! Mã nguồn sạch, 0 lỗi bảo mật."
           fi
 
-  # BƯỚC 2: THỰC THI SCA (Trivy)
   run_sca:
     needs: [brain_optimizer]
-    # CHỈ CHẠY nếu bộ não không trả về 'sca_skip'
     if: needs.brain_optimizer.outputs.sca_choice != 'sca_skip'
     runs-on: ubuntu-latest
     outputs:
@@ -137,7 +115,7 @@ jobs:
         run: |
           START_TIME=$(date +%s)
           if [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_standard" ]; then
-            trivy fs --scanners vuln --format json --output trivy-report.json . || true #không sập luôn mà chờ log
+            trivy fs --scanners vuln --format json --output trivy-report.json . || true
           elif [ "${{ needs.brain_optimizer.outputs.sca_choice }}" == "trivy_deep" ]; then
             trivy fs --scanners vuln,secret,misconfig --format json --output trivy-report.json . || true
           fi
@@ -150,16 +128,16 @@ jobs:
           fi
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
 
-          #KÍCH HOẠT FAIL FAST
+          # THÊM ANNOTATIONS CHO GIAO DIỆN
           if [ "$ISSUES" -gt 0 ]; then
-            echo "Phát hiện thư viện dính CVE"
+            echo "::error::🚨 SCA: Phát hiện thư viện dính $ISSUES lỗi CVE!"
             exit 1
+          else
+            echo "::notice::✅ SCA: Thư viện an toàn, 0 lỗ hổng CVE."
           fi
 
-  # BƯỚC 3: THỰC THI DAST (OWASP ZAP)
   run_dast:
     needs: [brain_optimizer]
-    # CHỈ CHẠY nếu bộ não không trả về 'dast_skip'
     if: needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
     runs-on: ubuntu-latest
     outputs:
@@ -167,7 +145,6 @@ jobs:
       issues: ${{ steps.dast_scan.outputs.issues }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -182,18 +159,17 @@ jobs:
       - name: Ghi nhận thời gian bắt đầu
         run: echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
 
-      #FIX LỖI PERMISSION CỦA DOCKER
       - name: Cấp quyền ghi cho thư mục làm việc của ZAP
         run: chmod -R 777 .
 
       - name: Chạy OWASP ZAP (Bản Nhẹ)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_quick'
         uses: zaproxy/action-baseline@v0.14.0
-        continue-on-error: true # Bỏ qua lỗi sập tiến trình
+        continue-on-error: true 
         with:
           target: 'http://localhost:5006'
-          fail_action: false #FALSE: Không đánh sập khi có cảnh báo
-          allow_issue_writing: false #FALSE: Đỡ tạo Issue rác trên GitHub
+          fail_action: false 
+          allow_issue_writing: false 
 
       - name: Chạy OWASP ZAP (Bản Full)
         if: needs.brain_optimizer.outputs.dast_choice == 'zap_full'
@@ -206,29 +182,26 @@ jobs:
 
       - name: Tính thời gian và Lấy số lượng lỗi thực tế
         id: dast_scan
-        #luôn chạy dù ZAP có báo fail ở trên
         if: always() 
         run: |
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           
-          # Đọc file report_json.json sinh ra từ ZAP để đếm chính xác số lượng cảnh báo
           if [ -f report_json.json ]; then
              ISSUES=$(jq '[.site[].alerts[].count | tonumber] | add // 0' report_json.json)
           else
              ISSUES=0
           fi
-          
-          echo "ZAP đã tìm thấy $ISSUES cảnh báo"
           echo "issues=$ISSUES" >> $GITHUB_OUTPUT
 
-          #KÍCH HOẠT FAIL FAST
+          # THÊM ANNOTATIONS CHO GIAO DIỆN
           if [ "$ISSUES" -gt 0 ]; then
-            echo "Ứng dụng có lỗ hổng khi chạy thực tế"
+            echo "::error::🚨 DAST: Máy chủ có lỗ hổng khi vận hành ($ISSUES cảnh báo)!"
             exit 1
+          else
+            echo "::notice::✅ DAST: Máy chủ cấu hình chuẩn, 0 cảnh báo."
           fi
 
-  # BƯỚC 4: VÒNG LẶP PHẢN HỒI (TỰ HỌC)
   feedback_and_learn:
     needs: [brain_optimizer, run_sast, run_sca, run_dast]
     runs-on: ubuntu-latest
@@ -242,7 +215,6 @@ jobs:
         with:
           python-version: '3.10'
 
-      #Cài đặt thư viện MongoDB
       - name: Cài đặt thư viện MongoDB
         run: pip install pymongo
 
@@ -251,9 +223,6 @@ jobs:
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
-          echo "Bắt đầu trích xuất dữ liệu để cập nhật cho AI..."
-          
-          # 1. Gom tất cả output vào biến Bash cục bộ để xử lý an toàn
           S_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
           S_DUR="${{ needs.run_sast.outputs.duration }}"
           S_SCORE="${{ needs.run_sast.outputs.issues }}"
@@ -266,23 +235,14 @@ jobs:
           D_DUR="${{ needs.run_dast.outputs.duration }}"
           D_SCORE="${{ needs.run_dast.outputs.issues }}"
 
-          # 2. Xử lý SAST (Chỉ chạy khi có ID, không phải Skip, có thời gian và có điểm)
           if [ -n "$S_CHOICE" ] && [ "$S_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ] && [ -n "$S_SCORE" ]; then
             python feedback_updater.py --cat SAST --id "$S_CHOICE" --time "$S_DUR" --score "$S_SCORE"
-          else
-            echo "Bỏ qua ghi nhận SAST (bị skip hoặc chưa kịp xuất dữ liệu)."
           fi
 
-          # 3. Xử lý SCA
           if [ -n "$C_CHOICE" ] && [ "$C_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ] && [ -n "$C_SCORE" ]; then
              python feedback_updater.py --cat SCA --id "$C_CHOICE" --time "$C_DUR" --score "$C_SCORE"
-          else
-             echo "Bỏ qua ghi nhận SCA (bị skip do Fail-fast ở bước trước)."
           fi
 
-          # 4. Xử lý DAST
           if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ] && [ -n "$D_SCORE" ]; then
              python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --score "$D_SCORE"
-          else
-             echo "Bỏ qua ghi nhận DAST (bị skip do Fail-fast ở bước trước)."
           fi
