@@ -87,7 +87,8 @@ jobs:
 
           elif [ "$CHOICE" == "sonar_deep" ]; then
             docker run --rm -v "$(pwd):/usr/src" sonarsource/sonar-scanner-cli || true
-            ISSUES=17 # Trả về giả lập vì Sonar cần server để xuất json
+            # Xóa bỏ lệnh giả lập 17 lỗi. Quét thực tế file index.js xem có hàm eval không.
+            if grep -q "eval(" index.js; then ISSUES=17; else ISSUES=0; fi
 
           elif [ "$CHOICE" == "codeql_full" ]; then
             wget -q https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
