@@ -193,6 +193,7 @@ jobs:
           CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
           ISSUES=0
 
+          # SỬA LỖI 3: Dùng Docker host network để bắn phá localhost
           if [ "$CHOICE" == "nuclei_fast" ]; then
             wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.1.9/nuclei_3.1.9_linux_amd64.zip
             unzip -o -q nuclei_3.1.9_linux_amd64.zip
@@ -201,23 +202,21 @@ jobs:
             
           elif [ "$CHOICE" == "zap_quick" ]; then
             docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -J report.json || true
-            # BỘ LỌC DAST: Chỉ đếm rủi ro Medium (2) hoặc High (3), tự động bỏ qua toàn bộ WARN-NEW
-            [ -f report.json ] && ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "2" or .riskcode == "3") | .count | tonumber] | add // 0' report.json)
+            [ -f report.json ] && ISSUES=$(jq '[.site[].alerts[].count | tonumber] | add // 0' report.json)
 
           elif [ "$CHOICE" == "zap_ajax_spider" ]; then
             docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -j -J report.json || true
-            [ -f report.json ] && ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "2" or .riskcode == "3") | .count | tonumber] | add // 0' report.json)
+            [ -f report.json ] && ISSUES=$(jq '[.site[].alerts[].count | tonumber] | add // 0' report.json)
 
           elif [ "$CHOICE" == "zap_full" ]; then
             docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py -t http://localhost:5006 -J report.json || true
-            [ -f report.json ] && ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "2" or .riskcode == "3") | .count | tonumber] | add // 0' report.json)
+            [ -f report.json ] && ISSUES=$(jq '[.site[].alerts[].count | tonumber] | add // 0' report.json)
           fi
 
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
-          echo "DAST tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
-          
+          echo "DAST tìm thấy ${ISSUES:-0} lỗi."
           if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
 
   feedback_and_learn:
