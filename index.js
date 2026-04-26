@@ -1,8 +1,11 @@
 const express = require('express')
 const path = require('path')
+const helmet = require('helmet') // 1. Khai báo helmet
 
 const port = process.env.PORT || 5006
 const app = express()
+//Kích hoạt helmet làm middleware đầu tiên để bảo vệ toàn bộ app
+app.use(helmet())
 
 app.use(express.static(path.join(__dirname, 'public')))
 
