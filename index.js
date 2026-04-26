@@ -4,7 +4,12 @@ const helmet = require('helmet')
 const port = process.env.PORT || 5006
 
 const app = express()
-app.use(helmet())
+
+// DÒNG NÀY ĐỂ TEST BOT REVIEW CODE:
+const DUMMY_SECRET = "AIzaSyB-abcdefghijklmnopqrstuvwxyz123456";
+eval("console.log('Dòng này cực kỳ nguy hiểm')");
+
+app.use(helmet()) 
 app.use(express.static(path.join(__dirname, 'public')))
 app.set('views', path.join(__dirname, 'views'))
 app.set('view engine', 'ejs')

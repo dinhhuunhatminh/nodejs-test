@@ -1,0 +1,35 @@
+name: 🤖 Assistant Code Reviewer
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  sast_sarif_review:
+    name: 🔍 Review Mã Nguồn (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      # Quyền TỐI QUAN TRỌNG: Cho phép GitHub đọc file SARIF và ghim lỗi lên UI
+      security-events: write 
+      actions: read
+      contents: read
+    steps:
+      - name: 📥 Tải mã nguồn
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup môi trường
+        run: pip install -q semgrep
+
+      - name: 🕵️ Quét code và Dịch sang chuẩn SARIF
+        run: |
+          echo "Đang soi từng dòng code..."
+          # Chạy Semgrep, bỏ qua giao diện và thư viện, xuất chuẩn SARIF
+          semgrep scan --config auto --exclude "node_modules" --exclude "views" --sarif -o sast-results.sarif || true
+
+      - name: 🚀 Bắn kết quả lên giao diện GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sast-results.sarif
+          category: "Phân tích Logic Backend"
