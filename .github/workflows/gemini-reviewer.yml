@@ -1,0 +1,81 @@
+name: 🤖 Gemini Code Reviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize] # Chỉ chạy khi có Pull Request mới hoặc code mới được đẩy lên PR
+
+jobs:
+  gemini_review:
+    name: 🧠 Agentic AI Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # Quyền tối quan trọng để bot được phép comment vào PR
+    steps:
+      - name: 📥 Tải mã nguồn
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Tải toàn bộ lịch sử Git để so sánh sự thay đổi (Diff)
+
+      - name: ⚙️ Cài đặt Python & Thư viện
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: 📦 Cài đặt SDK Google Generative AI
+        run: pip install -q google-generativeai
+
+      - name: 🔍 Lấy nội dung code thay đổi
+        run: |
+          git diff origin/${{ github.event.pull_request.base.ref }}...HEAD > pr_diff.txt
+          echo "Đã trích xuất thành công các dòng code mới."
+
+      - name: 🤖 Kích hoạt LLM Suy luận
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python -c "
+          import os
+          import google.generativeai as genai
+
+          # Khởi tạo kết nối với Gemini
+          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+          model = genai.GenerativeModel('gemini-1.5-flash')
+
+          # Đọc đoạn code vừa thay đổi
+          with open('pr_diff.txt', 'r', encoding='utf-8') as f:
+              diff = f.read()
+
+          if len(diff.strip()) < 10:
+              with open('review.txt', 'w', encoding='utf-8') as f:
+                  f.write('👍 Không có thay đổi mã nguồn nào đáng kể để review.')
+              exit(0)
+
+          # Nhồi Prompt (Chỉ thị) cho AI
+          prompt = '''Nhiệm vụ của bạn là làm một AI Reviewer lão luyện. Hãy đọc đoạn code Git Diff sau.
+          Tìm các lỗi logic, lỗ hổng bảo mật, hoặc code smell.
+          Trả lời bằng Tiếng Việt, ngắn gọn, súc tích và chuyên nghiệp.
+          Cấu trúc comment:
+          🚨 **[Mức độ rủi ro: Cao/Trung bình/Thấp] - [Phân loại: Bảo mật/Hiệu suất/Logic]**
+          - **Nguyên nhân**: ...
+          - **Đề xuất sửa**: (Viết mã an toàn vào block code)
+          Nếu code hoàn toàn an toàn, hãy khen ngợi ngắn gọn.
+          
+          Đoạn code Diff:
+          ''' + diff
+
+          try:
+              # Gọi API lấy câu trả lời
+              response = model.generate_content(prompt)
+              with open('review.txt', 'w', encoding='utf-8') as f:
+                  f.write(response.text)
+          except Exception as e:
+              with open('review.txt', 'w', encoding='utf-8') as f:
+                  f.write(f'⚠️ Lỗi khi gọi Gemini API: {str(e)}')
+          "
+
+      - name: 💬 Bắn Comment vào giao diện GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body-file review.txt
