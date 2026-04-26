@@ -7,7 +7,7 @@ const app = express()
 
 // DÒNG NÀY ĐỂ TEST BOT REVIEW CODE:
 const DUMMY_SECRET = "AIzaSyB-abcdefghijklmnopqrstuvwxyz123456";
-eval("console.log('Dòng này cực kỳ nguy hiểm')");
+const DB_PASSWORD = "super_secret_admin_123456";
 
 app.use(helmet()) 
 app.use(express.static(path.join(__dirname, 'public')))
