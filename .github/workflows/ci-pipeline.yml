@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       selected_layers:
-        description: 'Chọn các lớp bảo mật (VD: SAST,SCA,DAST)'
+        description: 'Chọn các lớp (VD: SAST,SCA,DAST)'
         required: true
         default: 'SAST,SCA,DAST'
         type: string
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - name: Chạy SAST và Trích xuất lỗi
+      - name: Chạy SAST và Hiển thị Lỗi trực quan
         id: sast_scan
         run: |
           START_TIME=$(date +%s)
@@ -68,17 +68,18 @@ jobs:
 
           if [ "$CHOICE" == "semgrep_standard" ]; then
             pip install semgrep
+            echo "=== IN KẾT QUẢ SEMGREP RA MÀN HÌNH ==="
+            semgrep scan --config auto --exclude "node_modules" || true
             semgrep scan --config auto --exclude "node_modules" --json -o report.json || true
-            if [ -f report.json ]; then
-              ISSUES=$(jq '.results | length' report.json || echo 0)
-            fi
+            if [ -s report.json ]; then ISSUES=$(jq '.results | length' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "njsscan_quick" ]; then
             pip install njsscan
+            echo "=== IN KẾT QUẢ NJSSCAN RA MÀN HÌNH ==="
+            njsscan . || true  # <--- In trực tiếp lỗi ra đây để nhìn dễ nhất!
             njsscan . --sarif -o report.sarif || true
-            # BỌC CHỐNG CRASH: Xử lý an toàn khi file JSON rỗng (code sạch)
-            if [ -f report.sarif ]; then
-              ISSUES=$(jq '[.runs[]?.results[]? | select(.level == "error")] | length' report.sarif || echo 0)
+            if [ -s report.sarif ]; then
+              ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0)
             fi
 
           elif [ "$CHOICE" == "sonar_deep" ]; then
@@ -90,9 +91,7 @@ jobs:
             tar -xzf codeql-bundle-linux64.tar.gz
             ./codeql/codeql database create db --language=javascript || true
             ./codeql/codeql database analyze db javascript-security-extended.qls --format=sarif-latest --output=report.sarif || true
-            if [ -f report.sarif ]; then
-              ISSUES=$(jq '[.runs[]?.results[]? | select(.level == "error")] | length' report.sarif || echo 0)
-            fi
+            if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0); fi
           fi
           
           END_TIME=$(date +%s)
@@ -114,7 +113,7 @@ jobs:
           node-version: '20'
       - name: Cài đặt Trivy
         run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
-      - name: Chạy Công cụ SCA và Trích xuất lỗi
+      - name: Chạy SCA và Hiển thị Lỗi trực quan
         id: sca_scan
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -124,22 +123,30 @@ jobs:
           ISSUES=0
 
           if [ "$CHOICE" == "trivy_standard" ]; then
+            echo "=== IN LỖI TRIVY RA MÀN HÌNH ==="
+            trivy fs --scanners vuln --severity HIGH,CRITICAL . || true
             trivy fs --scanners vuln --severity HIGH,CRITICAL --format json --output report.json . || true
-            if [ -f report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) | length] | add // 0' report.json || echo 0); fi
+            if [ -s report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) | length] | add // 0' report.json 2>/dev/null || echo 0); fi
             
           elif [ "$CHOICE" == "trivy_deep" ]; then
+            echo "=== IN LỖI TRIVY RA MÀN HÌNH ==="
+            trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL . || true
             trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --format json --output report.json . || true
-            if [ -f report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) + (.Misconfigurations // []) + (.Secrets // []) | length] | add // 0' report.json || echo 0); fi
+            if [ -s report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) + (.Misconfigurations // []) + (.Secrets // []) | length] | add // 0' report.json 2>/dev/null || echo 0); fi
             
           elif [ "$CHOICE" == "npm_audit" ]; then
             npm install --package-lock-only || true
+            echo "=== IN LỖI NPM AUDIT RA MÀN HÌNH ==="
+            npm audit || true
             npm audit --json > report.json || true
-            if [ -f report.json ]; then ISSUES=$(jq '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' report.json || echo 0); fi
+            if [ -s report.json ]; then ISSUES=$(jq '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' report.json 2>/dev/null || echo 0); fi
             
           elif [ "$CHOICE" == "snyk_advanced" ]; then
             npm install -g snyk
+            echo "=== IN LỖI SNYK RA MÀN HÌNH ==="
+            snyk test --all-projects --severity-threshold=high || true
             snyk test --all-projects --severity-threshold=high --json > report.json || true
-            if [ -f report.json ]; then ISSUES=$(jq 'if type == "array" then [.[].uniqueCount] | add else .uniqueCount end' report.json || echo 0); fi
+            if [ -s report.json ]; then ISSUES=$(jq 'if type == "array" then [.[].uniqueCount] | add else .uniqueCount end' report.json 2>/dev/null || echo 0); fi
           fi
           
           END_TIME=$(date +%s)
@@ -177,20 +184,22 @@ jobs:
           if [ "$CHOICE" == "nuclei_fast" ]; then
             wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.1.9/nuclei_3.1.9_linux_amd64.zip
             unzip -o -q nuclei_3.1.9_linux_amd64.zip
+            echo "=== IN LỖI NUCLEI RA MÀN HÌNH ==="
+            ./nuclei -u http://localhost:5006 || true
             ./nuclei -u http://localhost:5006 -jsonl -o report.jsonl || true
-            if [ -f report.jsonl ]; then ISSUES=$(wc -l < report.jsonl || echo 0); fi
+            if [ -s report.jsonl ]; then ISSUES=$(wc -l < report.jsonl 2>/dev/null || echo 0); fi
             
           elif [ "$CHOICE" == "zap_quick" ]; then
             docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -J report.json || true
-            if [ -f report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json || echo 0); fi
+            if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "zap_ajax_spider" ]; then
             docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -j -J report.json || true
-            if [ -f report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json || echo 0); fi
+            if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "zap_full" ]; then
             docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py -t http://localhost:5006 -J report.json || true
-            if [ -f report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json || echo 0); fi
+            if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
           fi
 
           END_TIME=$(date +%s)
