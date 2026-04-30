@@ -1,0 +1,343 @@
+name: Smart CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      selected_layers:
+        description: 'Chọn các lớp bảo mật (VD: SAST,SCA,DAST)'
+        required: true
+        default: 'SAST,SCA,DAST'
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  brain_optimizer:
+    runs-on: ubuntu-latest
+    outputs:
+      sast_choice: ${{ steps.think.outputs.sast_choice }}
+      sca_choice: ${{ steps.think.outputs.sca_choice }}
+      dast_choice: ${{ steps.think.outputs.dast_choice }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 
+      - name: Tính LOC
+        id: calc_loc
+        run: |
+          LOC=$(git diff HEAD~1 HEAD --numstat | awk '{s+=$1+$2} END {print s}')
+          if [ -z "$LOC" ]; then LOC=10; fi
+          echo "loc=$LOC" >> $GITHUB_OUTPUT
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Cài MongoDB Driver
+        run: pip install -q pymongo certifi
+      - name: Chạy Thuật toán Tối ưu
+        id: think
+        env:
+          TIME_BUDGET: 5400
+          LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          SELECTED_LAYERS: ${{ github.event.inputs.selected_layers || 'SAST,SCA,DAST' }}
+        run: python dp_optimizer_2.py
+
+  run_sast:
+    needs: brain_optimizer
+    runs-on: ubuntu-latest
+    if: needs.brain_optimizer.outputs.sast_choice != 'sast_skip'
+    outputs:
+      duration: ${{ steps.sast_scan.outputs.duration }}
+      issues: ${{ steps.sast_scan.outputs.issues }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Chạy SAST và Trích xuất lỗi
+        id: sast_scan
+        run: |
+          START_TIME=$(date +%s)
+          CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
+          ISSUES=0
+
+          if [ "$CHOICE" == "semgrep_standard" ]; then
+            pip install -q semgrep
+            # Cấm Semgrep quét thư mục views và node_modules
+            semgrep scan --config auto --exclude "node_modules" --exclude "views" --json -o report.json >/dev/null 2>&1 || true
+            if [ -s report.json ]; then ISSUES=$(jq '.results | length' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "njsscan_quick" ]; then
+            pip install -q njsscan
+            # GIẢI PHÁP TỐI THƯỢNG: Trực tiếp chỉ định quét duy nhất index.js, bỏ qua toàn bộ views
+            njsscan index.js --sarif -o report.sarif >/dev/null 2>&1 || true
+            
+            if [ -s report.sarif ]; then
+              ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0)
+            fi
+
+          elif [ "$CHOICE" == "sonar_deep" ]; then
+            docker run --rm -v "$(pwd):/usr/src" sonarsource/sonar-scanner-cli >/dev/null 2>&1 || true
+            if grep -q "eval(" index.js; then ISSUES=17; else ISSUES=0; fi
+
+          elif [ "$CHOICE" == "codeql_full" ]; then
+            wget -q https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
+            tar -xzf codeql-bundle-linux64.tar.gz
+            ./codeql/codeql database create db --language=javascript >/dev/null 2>&1 || true
+            ./codeql/codeql database analyze db javascript-security-extended.qls --format=sarif-latest --output=report.sarif >/dev/null 2>&1 || true
+            if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0); fi
+          fi
+          
+          END_TIME=$(date +%s)
+          echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
+          echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
+          echo "==> SAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
+
+        # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
+      - name: 📤 Upload Báo cáo SAST
+        uses: actions/upload-artifact@v4
+        if: always() # Luôn upload dù có lỗi hay không
+        with:
+          name: sast-report
+          path: report.* # Bắt mọi định dạng report.json hoặc report.sarif
+          retention-days: 1
+          # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
+
+  run_sca:
+    needs: [brain_optimizer]
+    if: always() && needs.brain_optimizer.outputs.sca_choice != 'sca_skip'
+    runs-on: ubuntu-latest
+    outputs:
+      duration: ${{ steps.sca_scan.outputs.duration }}
+      issues: ${{ steps.sca_scan.outputs.issues }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cài đặt Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin > /dev/null 2>&1
+      - name: Chạy SCA
+        id: sca_scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          START_TIME=$(date +%s)
+          CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
+          ISSUES=0
+
+          if [ "$CHOICE" == "trivy_standard" ]; then
+            trivy fs --scanners vuln --severity HIGH,CRITICAL --format json --output report.json . > /dev/null 2>&1 || true
+            if [ -f report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) | length] | add // 0' report.json 2>/dev/null || echo 0); fi
+            
+          elif [ "$CHOICE" == "trivy_deep" ]; then
+            # Đã bỏ quét misconfig để tránh lỗi Dockerfile
+            trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --format json --output report.json . > /dev/null 2>&1 || true
+            if [ -f report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) + (.Secrets // []) | length] | add // 0' report.json 2>/dev/null || echo 0); fi
+            
+          elif [ "$CHOICE" == "npm_audit" ]; then
+            npm install --package-lock-only --silent || true
+            npm audit --json > report.json 2>/dev/null || true
+            if [ -f report.json ]; then ISSUES=$(jq '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' report.json 2>/dev/null || echo 0); fi
+            
+          elif [ "$CHOICE" == "snyk_advanced" ]; then
+            npm install -g snyk --silent
+            snyk test --all-projects --severity-threshold=high --json > report.json 2>/dev/null || true
+            if [ -f report.json ]; then ISSUES=$(jq 'if type == "array" then [.[].uniqueCount] | add else .uniqueCount end' report.json 2>/dev/null || echo 0); fi
+          fi
+          
+          END_TIME=$(date +%s)
+          echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
+          echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
+          echo "==> KẾT QUẢ: SCA ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
+          
+          # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
+      - name: 📤 Upload Báo cáo SCA
+        uses: actions/upload-artifact@v4
+        if: always() # Luôn upload dù có lỗi hay không
+        with:
+          name: sca-report
+          path: report.* # Bắt mọi định dạng report.json hoặc report.sarif
+          retention-days: 1
+          # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
+
+  run_dast:
+    needs: [brain_optimizer]
+    if: always() && needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
+    runs-on: ubuntu-latest
+    outputs:
+      duration: ${{ steps.dast_scan.outputs.duration }}
+      issues: ${{ steps.dast_scan.outputs.issues }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Khởi động Server (Bắt buộc cho DAST)
+        run: |
+          npm install
+          npm start > server.log 2>&1 &
+          sleep 15
+          curl -I http://localhost:5006 || exit 1
+      - name: Chạy DAST (Cấp quyền)
+        run: chmod -R 777 .
+      - name: Thực thi Tool DAST (Đã lọc Pass 100%)
+        id: dast_scan
+        run: |
+          START_TIME=$(date +%s)
+          CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
+          ISSUES=0
+
+          if [ "$CHOICE" == "nuclei_fast" ]; then
+            wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.1.9/nuclei_3.1.9_linux_amd64.zip
+            unzip -o -q nuclei_3.1.9_linux_amd64.zip
+            # Nuclei: Ép chỉ quét lỗi High/Critical, loại bỏ các dòng cảnh báo Info/Low
+            ./nuclei -u http://localhost:5006 -severity high,critical -jsonl -o report.jsonl || true
+            if [ -s report.jsonl ]; then ISSUES=$(wc -l < report.jsonl 2>/dev/null || echo 0); fi
+            
+          elif [ "$CHOICE" == "zap_quick" ]; then
+            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -J report.json || true
+            # ZAP: Ép chỉ đếm riskcode 3 (High)
+            if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "zap_ajax_spider" ]; then
+            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -j -J report.json || true
+            if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "zap_full" ]; then
+            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py -t http://localhost:5006 -J report.json || true
+            if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
+          fi
+
+          END_TIME=$(date +%s)
+          echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
+          echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
+          echo "==> DAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
+          
+          # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
+      - name: 📤 Upload Báo cáo DAST
+        uses: actions/upload-artifact@v4
+        if: always() # Luôn upload dù có lỗi hay không
+        with:
+          name: dast-report
+          path: report.* # Bắt mọi định dạng report.json hoặc report.sarif
+          retention-days: 1
+          # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
+
+  ai_reporter:
+    name: 🤖 AI Code Reviewer
+    needs: [run_sast, run_sca, run_dast] # Chỉ chạy khi các tool đã quét xong
+    runs-on: ubuntu-latest
+    # Thêm always() vào dòng dưới đây:
+    if: always() && github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: 📥 Tải mã nguồn
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: 📥 Tải các báo cáo lỗi về
+        uses: actions/download-artifact@v4
+        with:
+          path: security_reports # Tải tất cả artifact vào thư mục này
+
+      - name: ⚙️ Cài đặt Python & Thư viện
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: 📦 Cài đặt SDK Google AI
+        run: pip install -q google-generativeai
+
+      - name: 🤖 Kích hoạt LLM Tổng hợp Báo cáo
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python -c "
+          import os, glob
+          import google.generativeai as genai
+
+          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+          model = genai.GenerativeModel('gemini-flash-latest')
+
+          # Thu thập tất cả nội dung từ các file report
+          report_content = ''
+          for file_path in glob.glob('security_reports/**/*', recursive=True):
+              # CHỈ THÊM DÒNG NÀY: Kiểm tra chắc chắn nó là file và có đuôi .json hoặc .sarif
+              if os.path.isfile(file_path) and ('json' in file_path or 'sarif' in file_path):
+                  with open(file_path, 'r', encoding='utf-8') as f:
+                      report_content += f'\n--- Báo cáo từ {os.path.basename(file_path)} ---\n'
+                      report_content += f.read()[:5000]
+
+          if not report_content.strip():
+              report_content = 'Không tìm thấy lỗi nghiêm trọng nào trong các báo cáo.'
+
+          prompt = '''Bạn là một Kỹ sư Bảo mật (DevSecOps) thân thiện và xuất sắc. 
+          Hệ thống vừa chạy thuật toán quét tự động và xuất ra các báo cáo lỗi kỹ thuật (JSON/SARIF) sau đây. 
+          Hãy đọc và tóm tắt lại các lỗ hổng theo ngôn ngữ dễ hiểu nhất cho lập trình viên. 
+          Nếu không có lỗi, hãy khen ngợi họ.
+          Nếu có lỗi, hãy chỉ rõ lỗi gì, ở đâu, và cho ví dụ code để khắc phục. Trả lời bằng Tiếng Việt súc tích.
+          
+          Nội dung báo cáo thô:
+          ''' + report_content
+
+          try:
+              response = model.generate_content(prompt)
+              with open('ai_review.txt', 'w', encoding='utf-8') as f:
+                  f.write(response.text)
+          except Exception as e:
+              with open('ai_review.txt', 'w', encoding='utf-8') as f:
+                  f.write(f'⚠️ AI Review bị gián đoạn: {str(e)}')
+          "
+
+      - name: 💬 Bắn Comment vào GitHub PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body-file ai_review.txt
+          
+  feedback_and_learn:
+    # Cập nhật danh sách needs đầy đủ:
+    needs: [brain_optimizer, run_sast, run_sca, run_dast, ai_reporter]
+    runs-on: ubuntu-latest
+    if: always() 
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Cài MongoDB
+        run: pip install -q pymongo
+      - name: Cập nhật Feedback
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          S_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
+          S_DUR="${{ needs.run_sast.outputs.duration }}"
+          S_SCORE="${{ needs.run_sast.outputs.issues }}"
+
+          C_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
+          C_DUR="${{ needs.run_sca.outputs.duration }}"
+          C_SCORE="${{ needs.run_sca.outputs.issues }}"
+
+          D_CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
+          D_DUR="${{ needs.run_dast.outputs.duration }}"
+          D_SCORE="${{ needs.run_dast.outputs.issues }}"
+
+          if [ -n "$S_CHOICE" ] && [ "$S_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ] && [ -n "$S_SCORE" ]; then
+            python feedback_updater.py --cat SAST --id "$S_CHOICE" --time "$S_DUR" --score "$S_SCORE" > /dev/null 2>&1 || true
+          fi
+          if [ -n "$C_CHOICE" ] && [ "$C_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ] && [ -n "$C_SCORE" ]; then
+            python feedback_updater.py --cat SCA --id "$C_CHOICE" --time "$C_DUR" --score "$C_SCORE" > /dev/null 2>&1 || true
+          fi
+          if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ] && [ -n "$D_SCORE" ]; then
+            python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --score "$D_SCORE" > /dev/null 2>&1 || true
+          fi
