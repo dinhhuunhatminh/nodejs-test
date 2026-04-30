@@ -41,7 +41,7 @@ jobs:
       - name: Chạy Thuật toán Tối ưu
         id: think
         env:
-          TIME_BUDGET: 1800
+          TIME_BUDGET: 5400
           LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
           SELECTED_LAYERS: ${{ github.event.inputs.selected_layers || 'SAST,SCA,DAST' }}
