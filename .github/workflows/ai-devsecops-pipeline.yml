@@ -233,7 +233,8 @@ jobs:
     name: 🤖 AI Code Reviewer
     needs: [run_sast, run_sca, run_dast] # Chỉ chạy khi các tool đã quét xong
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' # Chỉ báo cáo bằng AI nếu là Pull Request
+    # Thêm always() vào dòng dưới đây:
+    if: always() && github.event_name == 'pull_request'
     permissions:
       contents: read
       pull-requests: write
