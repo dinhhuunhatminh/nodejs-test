@@ -275,7 +275,7 @@ jobs:
               if os.path.isfile(file_path) and ('json' in file_path or 'sarif' in file_path):
                   with open(file_path, 'r', encoding='utf-8') as f:
                       report_content += f'\n--- Báo cáo từ {os.path.basename(file_path)} ---\n'
-                      report_content += f.read()[:5000]
+                      report_content += f.read()[:50000]
 
           if not report_content.strip():
               report_content = 'Không tìm thấy lỗi nghiêm trọng nào trong các báo cáo.'
