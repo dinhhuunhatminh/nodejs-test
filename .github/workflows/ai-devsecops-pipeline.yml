@@ -270,11 +270,12 @@ jobs:
 
           # Thu thập tất cả nội dung từ các file report
           report_content = ''
-          for file in glob.glob('security_reports/**/*report*', recursive=True):
-              with open(file, 'r', encoding='utf-8') as f:
-                  report_content += f'\n--- Báo cáo từ {os.path.basename(os.path.dirname(file))} ---\n'
-                  # Cắt ngắn bớt nếu file quá dài để tiết kiệm token
-                  report_content += f.read()[:5000] 
+          for file_path in glob.glob('security_reports/**/*', recursive=True):
+              # CHỈ THÊM DÒNG NÀY: Kiểm tra chắc chắn nó là file và có đuôi .json hoặc .sarif
+              if os.path.isfile(file_path) and ('json' in file_path or 'sarif' in file_path):
+                  with open(file_path, 'r', encoding='utf-8') as f:
+                      report_content += f'\n--- Báo cáo từ {os.path.basename(file_path)} ---\n'
+                      report_content += f.read()[:5000]
 
           if not report_content.strip():
               report_content = 'Không tìm thấy lỗi nghiêm trọng nào trong các báo cáo.'
@@ -304,6 +305,7 @@ jobs:
           gh pr comment ${{ github.event.pull_request.number }} --body-file ai_review.txt
           
   feedback_and_learn:
+    # Cập nhật danh sách needs đầy đủ:
     needs: [brain_optimizer, run_sast, run_sca, run_dast, ai_reporter]
     runs-on: ubuntu-latest
     if: always() 
