@@ -99,7 +99,7 @@ jobs:
           echo "==> SAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
 
         # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
-      - name: 📤 Upload Báo cáo SAST
+      - name: Upload Báo cáo SAST
         uses: actions/upload-artifact@v4
         if: always() # Luôn upload dù có lỗi hay không
         with:
@@ -157,7 +157,7 @@ jobs:
           echo "==> KẾT QUẢ: SCA ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
           
           # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
-      - name: 📤 Upload Báo cáo SCA
+      - name: Upload Báo cáo SCA
         uses: actions/upload-artifact@v4
         if: always() # Luôn upload dù có lỗi hay không
         with:
@@ -220,7 +220,7 @@ jobs:
           echo "==> DAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
           
           # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
-      - name: 📤 Upload Báo cáo DAST
+      - name: Upload Báo cáo DAST
         uses: actions/upload-artifact@v4
         if: always() # Luôn upload dù có lỗi hay không
         with:
@@ -230,7 +230,7 @@ jobs:
           # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
 
   ai_reporter:
-    name: 🤖 AI Code Reviewer
+    name: AI Code Reviewer
     needs: [run_sast, run_sca, run_dast] # Chỉ chạy khi các tool đã quét xong
     runs-on: ubuntu-latest
     # Thêm always() vào dòng dưới đây:
@@ -239,25 +239,25 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: 📥 Tải mã nguồn
+      - name: Tải mã nguồn
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           
-      - name: 📥 Tải các báo cáo lỗi về
+      - name: Tải các báo cáo lỗi về
         uses: actions/download-artifact@v4
         with:
           path: security_reports # Tải tất cả artifact vào thư mục này
 
-      - name: ⚙️ Cài đặt Python & Thư viện
+      - name: Cài đặt Python & Thư viện
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           
-      - name: 📦 Cài đặt SDK Google AI
+      - name: Cài đặt SDK Google AI
         run: pip install -q google-generativeai
 
-      - name: 🤖 Kích hoạt LLM Tổng hợp Báo cáo
+      - name: Kích hoạt LLM Tổng hợp Báo cáo
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -298,7 +298,7 @@ jobs:
                   f.write(f'⚠️ AI Review bị gián đoạn: {str(e)}')
           "
 
-      - name: 💬 Bắn Comment vào GitHub PR
+      - name: Bắn Comment vào GitHub PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
