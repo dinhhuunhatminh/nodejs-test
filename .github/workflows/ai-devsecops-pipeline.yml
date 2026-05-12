@@ -341,3 +341,21 @@ jobs:
           if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ] && [ -n "$D_SCORE" ]; then
             python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --score "$D_SCORE" > /dev/null 2>&1 || true
           fi
+      - name: Export Latest Metadata to File
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          # Dùng python để xuất dữ liệu ra file json
+          python -c "
+          import pymongo, os, json
+          client = pymongo.MongoClient(os.environ['MONGO_URI'])
+          data = client['devsecops']['tools'].find_one()
+          if '_id' in data: del data['_id'] # Xóa ID của mongo để file đẹp hơn
+          with open('latest_metadata.json', 'w', encoding='utf-8') as f:
+          json.dump(data, f, indent=4, ensure_ascii=False)
+          "
+      - name: Upload Metadata Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-mongodb-data
+          path: latest_metadata.json
