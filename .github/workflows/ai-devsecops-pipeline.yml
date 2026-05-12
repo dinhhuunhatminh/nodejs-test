@@ -345,14 +345,20 @@ jobs:
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
-          # Dùng python để xuất dữ liệu ra file json
           python -c "
           import pymongo, os, json
-          client = pymongo.MongoClient(os.environ['MONGO_URI'])
-          data = client['devsecops']['tools'].find_one()
-          if '_id' in data: del data['_id'] # Xóa ID của mongo để file đẹp hơn
-          with open('latest_metadata.json', 'w', encoding='utf-8') as f:
-          json.dump(data, f, indent=4, ensure_ascii=False)
+          try:
+              client = pymongo.MongoClient(os.environ['MONGO_URI'])
+              db = client['devsecops']
+              collection = db['tools']
+              data = collection.find_one()
+              if data and '_id' in data:
+                  del data['_id']
+              with open('latest_metadata.json', 'w', encoding='utf-8') as f:
+                  json.dump(data, f, indent=4, ensure_ascii=False)
+              print('Export successful')
+          except Exception as e:
+              print(f'Export failed: {e}')
           "
       - name: Upload Metadata Artifact
         uses: actions/upload-artifact@v4
