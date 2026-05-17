@@ -2,7 +2,7 @@ import os
 import argparse
 from pymongo import MongoClient
 
-def update_knowledge(category, tool_id, actual_time, actual_score, alpha=0.5):
+def update_knowledge(category, tool_id, actual_time, actual_score, alpha=0.1):
     # DÒNG CHẶN QUAN TRỌNG: Nếu ID có chữ "skip" hoặc thời gian chạy = 0, thì lập tức dừng hàm, không cập nhật gì cả!
     if "skip" in tool_id.lower() or actual_time == 0:
         print(f"Bỏ qua học tập cho {category} vì hệ thống đã Skip bước này.")
