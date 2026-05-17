@@ -235,6 +235,10 @@ jobs:
     needs: [brain_optimizer, run_sast, run_sca, run_dast]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: ubuntu-latest
+    # CẤP QUYỀN CHO BOT ĐƯỢC VIẾT COMMENT VÀO CONVERSATION
+    permissions:
+      pull-requests: write
+      contents: read
     steps:
       - name: Checkout mã nguồn
         uses: actions/checkout@v4
@@ -274,14 +278,12 @@ jobs:
 
           client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
 
-          # 1. QUÉT ĐỘNG TOÀN BỘ CÁC FILE MÃ NGUỒN TRONG REPO
+          # 1. Quét động toàn bộ file code
           source_code = ''
           for root, dirs, files in os.walk('.'):
-              # Bỏ qua các thư mục không cần thiết để tránh rác Prompt
               if '.git' in root or 'node_modules' in root or 'reports' in root:
                   continue
               for file in files:
-                  # Chỉ đọc các file code
                   if file.endswith(('.js', '.py', '.ts', '.jsx', '.json', '.yml')):
                       filepath = os.path.join(root, file)
                       try:
@@ -293,7 +295,7 @@ jobs:
           if not source_code:
               source_code = 'Không tìm thấy file mã nguồn hợp lệ nào.'
 
-          # 2. Đọc tổng hợp dữ liệu từ các báo cáo quét
+          # 2. Gom báo cáo
           raw_reports = ''
           for file_path in glob.glob('./reports/**/*.json', recursive=True):
               try:
@@ -302,7 +304,7 @@ jobs:
               except Exception:
                   pass
 
-          # 3. Prompt mới linh hoạt, không trói buộc vào index.js
+          # 3. Prompt phân tích đa file
           prompt = f'''
           Bạn là một chuyên gia DevSecOps. 
           Dưới đây là TOÀN BỘ mã nguồn của dự án (được chia theo từng file) và kết quả quét từ các công cụ bảo mật.
@@ -321,8 +323,8 @@ jobs:
           1. Đọc kết quả từ máy quét để tìm ra các lỗi bảo mật.
           2. Đối chiếu lỗi đó với MÃ NGUỒN DỰ ÁN phía trên. Bạn phải chỉ đích danh TÊN FILE (ví dụ: ./src/auth.js) và DÒNG CODE chứa lỗi.
           3. Giải thích ngắn gọn lý do tại sao dòng code đó nguy hiểm.
-          4. Cung cấp đoạn mã an toàn để lập trình viên thay thế.
-          5. Trả lời bằng TIẾNG VIỆT. Nếu tất cả các file đều an toàn, hãy nói "Toàn bộ mã nguồn an toàn".
+          4. Cung cấp đoạn mã an toàn để thay thế (Chỉ cung cấp mã nguồn sạch để copy/paste, không viết lảm nhảm bên trong block code).
+          5. Trả lời bằng TIẾNG VIỆT, định dạng Markdown rõ ràng.
           '''
 
           try:
@@ -330,12 +332,35 @@ jobs:
                   model='gemini-2.5-flash',
                   contents=prompt
               )
+              
+              # In ra Log để bạn xem
               print('\n================ GÓC NHẬN XÉT CỦA AI GEMINI ================')
               print(response.text)
               print('===========================================================')
+              
+              # LƯU TOÀN BỘ TEXT VÀO FILE ĐỂ ĐẨY LÊN TAB CONVERSATION
+              with open('ai_review.md', 'w', encoding='utf-8') as f:
+                  f.write('## 🤖 Báo Cáo Bảo Mật (AI DevSecOps Review)\n\n')
+                  f.write(response.text)
+                  
           except Exception as e:
               print(f'Lỗi hệ thống khi gọi Gemini API: {e}')
           EOF
+
+      # BƯỚC ĐẨY FILE LÊN TAB CONVERSATION
+      - name: Đăng toàn bộ báo cáo lên PR Conversation
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if [ -f "ai_review.md" ]; then
+            # Dùng lệnh này của GitHub CLI để đăng bài
+            gh pr comment $PR_URL -F ai_review.md
+            echo "Đã dán thành công toàn bộ nhận xét của AI vào tab Conversation!"
+          else
+            echo "Không thấy file ai_review.md đâu cả."
+          fi
           
   feedback_and_learn:
     # Cập nhật danh sách needs đầy đủ:
