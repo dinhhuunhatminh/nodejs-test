@@ -267,7 +267,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python -c "
+          python - << 'EOF'
           from google import genai
           import os
           import glob
@@ -281,12 +281,11 @@ jobs:
               if '.git' in root or 'node_modules' in root or 'reports' in root:
                   continue
               for file in files:
-                  # Chỉ đọc các file code (bạn có thể thêm .py, .java, .html... tùy ý)
+                  # Chỉ đọc các file code
                   if file.endswith(('.js', '.py', '.ts', '.jsx', '.json', '.yml')):
                       filepath = os.path.join(root, file)
                       try:
                           with open(filepath, 'r', encoding='utf-8') as f:
-                              # Gắn thẻ tên file rõ ràng để AI nhận diện
                               source_code += f'\n--- BẮT ĐẦU FILE: {filepath} ---\n' + f.read()[:5000] + f'\n--- KẾT THÚC FILE: {filepath} ---\n'
                       except Exception:
                           pass
@@ -309,14 +308,14 @@ jobs:
           Dưới đây là TOÀN BỘ mã nguồn của dự án (được chia theo từng file) và kết quả quét từ các công cụ bảo mật.
 
           MÃ NGUỒN DỰ ÁN:
-          \"\"\"
+          """
           {source_code}
-          \"\"\"
+          """
 
           KẾT QUẢ TỪ MÁY QUÉT:
-          \"\"\"
+          """
           {raw_reports if raw_reports else 'Không có tệp báo cáo nào được tìm thấy.'}
-          \"\"\"
+          """
 
           YÊU CẦU ĐÁNH GIÁ:
           1. Đọc kết quả từ máy quét để tìm ra các lỗi bảo mật.
@@ -336,7 +335,7 @@ jobs:
               print('===========================================================')
           except Exception as e:
               print(f'Lỗi hệ thống khi gọi Gemini API: {e}')
-          "
+          EOF
           
   feedback_and_learn:
     # Cập nhật danh sách needs đầy đủ:
