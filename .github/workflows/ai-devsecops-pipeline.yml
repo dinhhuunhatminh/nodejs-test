@@ -110,7 +110,7 @@ jobs:
 
   run_sca:
     needs: [brain_optimizer]
-    if: always() && needs.brain_optimizer.outputs.sca_choice != 'sca_skip'
+    if: needs.brain_optimizer.outputs.sca_choice != 'sca_skip'
     runs-on: ubuntu-latest
     outputs:
       duration: ${{ steps.sca_scan.outputs.duration }}
@@ -168,7 +168,7 @@ jobs:
 
   run_dast:
     needs: [brain_optimizer]
-    if: always() && needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
+    if: needs.brain_optimizer.outputs.dast_choice != 'dast_skip'
     runs-on: ubuntu-latest
     outputs:
       duration: ${{ steps.dast_scan.outputs.duration }}
