@@ -1,66 +1,56 @@
-# nodejs-getting-started
+# Tối ưu hóa các công cụ bảo mật trong DevOps Pinelines bằng thuật toán Quy hoạch động (nodejs-test)
 
-A barebones Node.js app using [Express](https://expressjs.com/).
+Dự án này là một nguyên mẫu (prototype) mô phỏng một đường ống CI/CD bảo mật thông minh. Thay vì chạy tất cả các công cụ quét mã nguồn một cách cứng nhắc, hệ thống tích hợp **Thuật toán Quy hoạch động (Knapsack)** để tối ưu hóa thời gian chạy và sử dụng **Trí tuệ nhân tạo (LLM)** để tương tác trực tiếp với lập trình viên trên nền tảng GitHub.
 
-This application supports the tutorials for both the [Cedar and Fir generations](https://devcenter.heroku.com/articles/generations) of the Heroku platform. You can check them out here:
+Ứng dụng mẫu được sử dụng để kiểm thử là một Web Server Node.js (dựa trên `nodejs-getting-started` của Heroku).
 
-* [Getting Started on Heroku with Node.js](https://devcenter.heroku.com/articles/getting-started-with-nodejs)
-* [Getting Started on Heroku Fir with Node.js](https://devcenter.heroku.com/articles/getting-started-with-nodejs-fir)
+## Tính năng cốt lõi
 
-## Running Locally
+*  Smart Orchestration (Điều phối thông minh):** Sử dụng thuật toán Knapsack (Python) để tự động chọn lọc các công cụ SAST, SCA, DAST phù hợp với ngân sách thời gian (Time Budget).
+*  AI Security Reviewer:** Tích hợp Google Gemini API. AI tự động đọc các báo cáo JSON/SARIF khô khan, dịch thành ngôn ngữ tự nhiên và comment hướng dẫn sửa lỗi ngay trên Pull Request.
+*  Self-Learning Mechanism (Cơ chế tự học):** Sử dụng thuật toán EMA (Exponential Moving Average) để tự động cập nhật thời gian chạy và điểm số hiệu năng (v_score) của các tool lên MongoDB sau mỗi lần chạy.
+*  Continuous Deployment (Triển khai liên tục):** Đóng gói bằng Docker (multi-layer) và tự động cập nhật image trên server thông qua Watchtower.
 
-Make sure you have [Node.js](http://nodejs.org/) and the [Heroku CLI](https://cli.heroku.com/) installed.
+## 🗂 Cấu trúc dự án
+Các file được tạo thêm hoặc có chỉnh sửa quan trọng 
+\`\`\`text
+nodejs-test
+ ┣  .github/workflows
+ ┃ ┗  ai-devsecops-pipeline.yml  # Kịch bản CI/CD cốt lõi - workflow dùng chính
+ ┣  data
+ ┣  public
+ ┣  view
+ ┣  index.js                       
+ ┣  Dockerfile                     # Đóng gói ứng dụng (node:18-alpine)
+ ┣  dp_optimizer_2.py              # Thuật toán Knapsack
+ ┣  dp_optimizer.py                # Thuật toán Tham lam để so sánh với Knapsack
+ ┣  feedback_updater.py            # Thuật toán EMA cập nhật DB
+ ┣  migrate_db.py                  # Script nạp dữ liệu lên MongoDB
+ ┗  package.json                   # Quản lý dependencies Node.js
+\`\`\`
 
-```sh
-$ git clone https://github.com/heroku/nodejs-getting-started.git # or clone your own fork
-$ cd nodejs-getting-started
-$ npm install
-$ npm start
-```
+##  Thiết lập và Cấu hình (Dành cho Fork/Clone)
 
-Your app should now be running on [localhost:5006](http://localhost:5006/).
+Để pipeline này có thể hoạt động trên repo của riêng bạn, hãy vào **Settings > Secrets and variables > Actions** và cấu hình các biến bảo mật (Repository Secrets) sau:
 
-## Deploying to Heroku
+* `MONGO_URI`: Chuỗi kết nối đến MongoDB Atlas của bạn (dùng cho thuật toán đọc/ghi chỉ số).
+* `GEMINI_API_KEY`: API Key của Google Gemini (dùng cho AI Code Reviewer).
+* `GITHUB_TOKEN`: (Đã có sẵn mặc định) Cấp quyền cho workflow có thể comment vào Pull Request.
 
-Using resources for this example app counts towards your usage. [Delete your app](https://devcenter.heroku.com/articles/heroku-cli-commands#heroku-apps-destroy) and [database](https://devcenter.heroku.com/articles/heroku-postgresql#removing-the-add-on) as soon as you are done experimenting to control costs.
+##  Hướng dẫn vận hành Pipeline
 
-### Deploy on [Cedar][cedar]
+Hệ thống CI/CD được thiết kế tự động hoàn toàn. Để kích hoạt và kiểm thử các tính năng:
 
-By default, apps use Eco dynos on [Cedar][cedar] if you are subscribed to Eco. Otherwise, it defaults to Basic dynos. The 
-Eco dynos plan is shared across all Eco dynos in your account and is recommended if you plan on deploying many small apps 
-to Heroku. Learn more about our low-cost plans [here](https://blog.heroku.com/new-low-cost-plans).
+1. **Kiểm thử Thuật toán (Push to Main):** Thực hiện commit và push một thay đổi bất kỳ lên nhánh `main`. Truy cập tab **Actions**, bạn sẽ thấy luồng chạy thực thi, Job `brain_optimizer` sẽ phân bổ thời gian và kích hoạt các Job quét tương ứng.
+2. **Kiểm thử AI Reviewer (Tạo Pull Request):**
+   * Tạo một nhánh mới (vd: `test-loi-ai`).
+   * Cố tình thêm một lỗ hổng bảo mật vào `index.js` (Ví dụ: Hardcode mật khẩu hoặc dùng hàm `eval()`).
+   * Mở một **Pull Request** yêu cầu gộp vào `main`.
+   * Đợi khoảng 2-3 phút, bot AI sẽ tự động comment chi tiết lỗi và cách khắc phục bằng tiếng Việt ngay trong luồng thảo luận của PR.
 
-Eligible students can apply for platform credits through our new [Heroku for GitHub Students program](https://blog.heroku.com/github-student-developer-program).
+## 🛠 Công nghệ sử dụng
 
-```
-$ heroku create
-$ git push heroku main
-$ heroku open
-```
-
-### Deploy on [Fir][fir]
-
-By default, apps on [Fir][fir] use 1X-Classic dynos. To create an app on [Fir][fir] you'll need to 
-[create a private space](https://devcenter.heroku.com/articles/working-with-private-spaces#create-a-private-space)
-first.
-
-```
-$ heroku spaces:create <space-name> --team <team-name> --generation fir
-$ heroku create --space <space-name>
-$ git push heroku main
-$ heroku open
-```
-
-## Documentation
-
-For more information about using Node.js on Heroku, see these Dev Center articles:
-
-- [Getting Started on Heroku with Node.js](https://devcenter.heroku.com/articles/getting-started-with-nodejs)
-- [Getting Started on Heroku Fir with Node.js](https://devcenter.heroku.com/articles/getting-started-with-nodejs-fir)
-- [Heroku Node.js Support](https://devcenter.heroku.com/articles/nodejs-support)
-- [Node.js on Heroku](https://devcenter.heroku.com/categories/nodejs)
-- [Best Practices for Node.js Development](https://devcenter.heroku.com/articles/node-best-practices)
-- [Using WebSockets on Heroku with Node.js](https://devcenter.heroku.com/articles/node-websockets)
-
-[cedar]: https://devcenter.heroku.com/articles/generations#cedar
-[fir]: https://devcenter.heroku.com/articles/generations#fir
+* **App:** Node.js, Express.
+* **DevSecOps Tools:** Semgrep, Trivy, ZAP.
+* **Pipeline:** GitHub Actions, Python 3.10.
+* **Database & AI:** MongoDB, Google Gemini 1.5.
