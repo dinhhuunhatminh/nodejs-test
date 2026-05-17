@@ -230,79 +230,98 @@ jobs:
           # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
 
   ai_reporter:
-    name: AI Code Reviewer
-    needs: [run_sast, run_sca, run_dast] # Chỉ chạy khi các tool đã quét xong
+    needs: [brain_optimizer, run_sast, run_sca, run_dast]
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: ubuntu-latest
-    # Thêm always() vào dòng dưới đây:
-    if: always() && github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - name: Tải mã nguồn
+      - name: Checkout mã nguồn
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          
-      - name: Tải các báo cáo lỗi về
+
+      - name: Tải báo cáo SAST
         uses: actions/download-artifact@v4
         with:
-          path: security_reports # Tải tất cả artifact vào thư mục này
+          name: sast-report
+          path: ./reports/sast
+        continue-on-error: true
 
-      - name: Cài đặt Python & Thư viện
-        uses: actions/setup-python@v5
+      - name: Tải báo cáo SCA
+        uses: actions/download-artifact@v4
         with:
-          python-version: '3.10'
-          
-      - name: Cài đặt SDK Google AI
-        run: pip install -q google-generativeai
+          name: sca-report
+          path: ./reports/sca
+        continue-on-error: true
 
-      - name: Kích hoạt LLM Tổng hợp Báo cáo
+      - name: Tải báo cáo DAST
+        uses: actions/download-artifact@v4
+        with:
+          name: dast-report
+          path: ./reports/dast
+        continue-on-error: true
+
+      - name: Cài đặt thư viện Python cho AI
+        run: pip install -q google-genai
+
+      - name: AI Phân tích Lỗ hổng và Phản hồi
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python -c "
-          import os, glob
-          import google.generativeai as genai
+          from google import genai
+          import os
+          import glob
 
-          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-          model = genai.GenerativeModel('gemini-flash-latest')
+          # Khởi tạo Gemini bằng thư viện SDK mới để khắc phục lỗi endpoint cũ
+          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
 
-          # Thu thập tất cả nội dung từ các file report
-          report_content = ''
-          for file_path in glob.glob('security_reports/**/*', recursive=True):
-              # CHỈ THÊM DÒNG NÀY: Kiểm tra chắc chắn nó là file và có đuôi .json hoặc .sarif
-              if os.path.isfile(file_path) and ('json' in file_path or 'sarif' in file_path):
+          # 1. Đọc file mã nguồn index.js thực tế
+          source_code = 'Không tìm thấy file mã nguồn.'
+          if os.path.exists('index.js'):
+              with open('index.js', 'r', encoding='utf-8') as f:
+                  source_code = f.read()
+
+          # 2. Đọc tổng hợp dữ liệu từ các file báo cáo quét được tải về
+          raw_reports = ''
+          for file_path in glob.glob('./reports/**/*.json', recursive=True):
+              try:
                   with open(file_path, 'r', encoding='utf-8') as f:
-                      report_content += f'\n--- Báo cáo từ {os.path.basename(file_path)} ---\n'
-                      report_content += f.read()[:50000]
+                      raw_reports += '\n[BÁO CÁO TỪ FILE: ' + os.path.basename(file_path) + ']\n' + f.read()[:1500]
+              except Exception:
+                  pass
 
-          if not report_content.strip():
-              report_content = 'Không tìm thấy lỗi nghiêm trọng nào trong các báo cáo.'
+          # 3. Tạo cấu trúc Prompt tối ưu cho DevSecOps
+          prompt = f'''
+          Bạn là một chuyên gia bảo mật hệ thống (DevSecOps Expert) cao cấp.
+          Nhiệm vụ của bạn là thực hiện đánh giá an toàn mã nguồn (Code Review) dựa trên file mã nguồn thực tế và kết quả từ các công cụ quét tự động.
 
-          prompt = '''Bạn là một Kỹ sư Bảo mật (DevSecOps) thân thiện và xuất sắc. 
-          Hệ thống vừa chạy thuật toán quét tự động và xuất ra các báo cáo lỗi kỹ thuật (JSON/SARIF) sau đây. 
-          Hãy đọc và tóm tắt lại các lỗ hổng theo ngôn ngữ dễ hiểu nhất cho lập trình viên. 
-          Nếu không có lỗi, hãy khen ngợi họ.
-          Nếu có lỗi, hãy chỉ rõ lỗi gì, ở đâu, và cho ví dụ code để khắc phục. Trả lời bằng Tiếng Việt súc tích.
-          
-          Nội dung báo cáo thô:
-          ''' + report_content
+          MÃ NGUỒN CỦA LẬP TRÌNH VIÊN (index.js):
+          \"\"\"
+          {source_code}
+          \"\"\"
+
+          KẾT QUẢ THÔ TỪ CÁC MÁY QUÉT BẢO MẬT:
+          \"\"\"
+          {raw_reports if raw_reports else 'Không có tệp báo cáo nào được tìm thấy (Các công cụ quét có thể đã bị bỏ qua do giới hạn thời gian).'}
+          \"\"\"
+
+          YÊN CẦU ĐẦU RA:
+          1. Phân tích xem mã nguồn index.js có chứa lỗ hổng bảo mật nào nghiêm trọng không (Ví dụ: Lộ mật khẩu/Credentials hardcoded, hàm eval nguy hiểm, SQL Injection, XSS...).
+          2. Đối chiếu với kết quả thô từ máy quét để chỉ ra chính xác DÒNG CODE BỊ LỖI.
+          3. Giải thích lý do tại sao dòng code đó nguy hiểm và đưa ra giải pháp sửa đổi bằng mã nguồn an toàn.
+          4. Toàn bộ phản hồi phải được viết bằng TIẾNG VIỆT, ngắn gọn, trực diện vào lỗ hổng. Nếu mã nguồn hoàn toàn sạch, hãy trả lời: 'Mã nguồn an toàn'.
+          '''
 
           try:
-              response = model.generate_content(prompt)
-              with open('ai_review.txt', 'w', encoding='utf-8') as f:
-                  f.write(response.text)
+              # Sử dụng phương thức client.models.generate_content theo kiến trúc mới
+              response = client.models.generate_content(
+                  model='gemini-2.5-flash',
+                  contents=prompt
+              )
+              print('\n================ GÓC NHẬN XÉT CỦA AI GEMINI ================')
+              print(response.text)
+              print('===========================================================')
           except Exception as e:
-              with open('ai_review.txt', 'w', encoding='utf-8') as f:
-                  f.write(f'⚠️ AI Review bị gián đoạn: {str(e)}')
+              print(f'Lỗi hệ thống khi gọi Gemini API: {e}')
           "
-
-      - name: Bắn Comment vào GitHub PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body-file ai_review.txt
           
   feedback_and_learn:
     # Cập nhật danh sách needs đầy đủ:
