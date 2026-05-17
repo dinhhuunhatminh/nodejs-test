@@ -277,9 +277,11 @@ jobs:
           # 1. QUÉT ĐỘNG TOÀN BỘ CÁC FILE MÃ NGUỒN TRONG REPO
           source_code = ''
           for root, dirs, files in os.walk('.'):
+              # Bỏ qua các thư mục không cần thiết để tránh rác Prompt
               if '.git' in root or 'node_modules' in root or 'reports' in root:
                   continue
               for file in files:
+                  # Chỉ đọc các file code
                   if file.endswith(('.js', '.py', '.ts', '.jsx', '.json', '.yml')):
                       filepath = os.path.join(root, file)
                       try:
@@ -300,7 +302,7 @@ jobs:
               except Exception:
                   pass
 
-          # 3. Prompt linh hoạt
+          # 3. Prompt mới linh hoạt, không trói buộc vào index.js
           prompt = f'''
           Bạn là một chuyên gia DevSecOps. 
           Dưới đây là TOÀN BỘ mã nguồn của dự án (được chia theo từng file) và kết quả quét từ các công cụ bảo mật.
@@ -319,8 +321,8 @@ jobs:
           1. Đọc kết quả từ máy quét để tìm ra các lỗi bảo mật.
           2. Đối chiếu lỗi đó với MÃ NGUỒN DỰ ÁN phía trên. Bạn phải chỉ đích danh TÊN FILE (ví dụ: ./src/auth.js) và DÒNG CODE chứa lỗi.
           3. Giải thích ngắn gọn lý do tại sao dòng code đó nguy hiểm.
-          4. Cung cấp đoạn mã an toàn để thay thế (Chỉ cung cấp mã nguồn sạch để copy/paste, tuyệt đối không viết thêm comment giải thích dài dòng bên trong block code).
-          5. Trả lời bằng TIẾNG VIỆT, định dạng Markdown rõ ràng. Nếu tất cả các file đều an toàn, hãy nói "Toàn bộ mã nguồn an toàn".
+          4. Cung cấp đoạn mã an toàn để lập trình viên thay thế.
+          5. Trả lời bằng TIẾNG VIỆT. Nếu tất cả các file đều an toàn, hãy nói "Toàn bộ mã nguồn an toàn".
           '''
 
           try:
@@ -328,34 +330,12 @@ jobs:
                   model='gemini-2.5-flash',
                   contents=prompt
               )
-              
-              # Ghi kết quả ra màn hình log
               print('\n================ GÓC NHẬN XÉT CỦA AI GEMINI ================')
               print(response.text)
               print('===========================================================')
-              
-              # GHI KẾT QUẢ RA FILE ĐỂ GỬI LÊN GITHUB PR
-              with open('ai_review.md', 'w', encoding='utf-8') as f:
-                  f.write('## AI DevSecOps Review\n\n')
-                  f.write(response.text)
-                  
           except Exception as e:
               print(f'Lỗi hệ thống khi gọi Gemini API: {e}')
           EOF
-
-      # BƯỚC MỚI: ĐĂNG COMMENT LÊN PULL REQUEST
-      - name: Đăng Comment lên Pull Request
-        if: github.event_name == 'pull_request'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-        run: |
-          if [ -f "ai_review.md" ]; then
-            gh pr comment $PR_URL -F ai_review.md
-            echo "Đã đăng comment thành công lên PR!"
-          else
-            echo "Không tìm thấy file nhận xét từ AI, bỏ qua bước đăng comment."
-          fi
           
   feedback_and_learn:
     # Cập nhật danh sách needs đầy đủ:
