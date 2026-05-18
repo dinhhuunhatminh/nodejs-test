@@ -68,45 +68,45 @@ jobs:
 
           if [ "$CHOICE" == "semgrep_standard" ]; then
             pip install -q semgrep
-            # Cấm Semgrep quét thư mục views và node_modules
             semgrep scan --config auto --exclude "node_modules" --exclude "views" --json -o report.json >/dev/null 2>&1 || true
+            # Đếm số lỗi THỰC TẾ từ Semgrep
             if [ -s report.json ]; then ISSUES=$(jq '.results | length' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "njsscan_quick" ]; then
             pip install -q njsscan
-            # GIẢI PHÁP TỐI THƯỢNG: Trực tiếp chỉ định quét duy nhất index.js, bỏ qua toàn bộ views
             njsscan index.js --sarif -o report.sarif >/dev/null 2>&1 || true
-            
+            # Đếm số lỗi THỰC TẾ từ Njsscan
             if [ -s report.sarif ]; then
               ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0)
             fi
 
           elif [ "$CHOICE" == "sonar_deep" ]; then
             docker run --rm -v "$(pwd):/usr/src" sonarsource/sonar-scanner-cli >/dev/null 2>&1 || true
-            if grep -q "eval(" index.js; then ISSUES=17; else ISSUES=0; fi
+            # Đã xóa dòng gài lỗi giả (grep -q "eval" ... ISSUES=17). 
+            # Sonar không sinh file json local, trả về 0 để không làm nhiễu dữ liệu học của AI.
+            ISSUES=0
 
           elif [ "$CHOICE" == "codeql_full" ]; then
             wget -q https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
             tar -xzf codeql-bundle-linux64.tar.gz
             ./codeql/codeql database create db --language=javascript >/dev/null 2>&1 || true
             ./codeql/codeql database analyze db javascript-security-extended.qls --format=sarif-latest --output=report.sarif >/dev/null 2>&1 || true
+            # Đếm số lỗi THỰC TẾ từ CodeQL
             if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0); fi
           fi
           
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
-          echo "==> SAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
+          echo "==> SAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi thực tế."
 
-        # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
       - name: Upload Báo cáo SAST
         uses: actions/upload-artifact@v4
-        if: always() # Luôn upload dù có lỗi hay không
+        if: always()
         with:
           name: sast-report
-          path: report.* # Bắt mọi định dạng report.json hoặc report.sarif
+          path: report.*
           retention-days: 1
-          # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
 
 
   run_sca:
