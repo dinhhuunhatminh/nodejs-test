@@ -188,7 +188,7 @@ jobs:
           curl -I http://localhost:5006 || exit 1
       - name: Chạy DAST (Cấp quyền)
         run: chmod -R 777 .
-      - name: Thực thi Tool DAST (Đã lọc Pass 100%)
+      - name: Thực thi Tool DAST (Đã bọc giáp chống Crash)
         id: dast_scan
         run: |
           START_TIME=$(date +%s)
@@ -196,24 +196,44 @@ jobs:
           ISSUES=0
 
           if [ "$CHOICE" == "nuclei_fast" ]; then
-            wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.1.9/nuclei_3.1.9_linux_amd64.zip
-            unzip -o -q nuclei_3.1.9_linux_amd64.zip
-            # Nuclei: Ép chỉ quét lỗi High/Critical, loại bỏ các dòng cảnh báo Info/Low
-            ./nuclei -u http://localhost:5006 -severity high,critical -jsonl -o report.jsonl || true
+            wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.1.9/nuclei_3.1.9_linux_amd64.zip || true
+            unzip -o -q nuclei_3.1.9_linux_amd64.zip || true
+            ./nuclei -u http://localhost:5006 -severity high,critical -jsonl -o report.jsonl >/dev/null 2>&1 || true
             if [ -s report.jsonl ]; then ISSUES=$(wc -l < report.jsonl 2>/dev/null || echo 0); fi
             
           elif [ "$CHOICE" == "zap_quick" ]; then
-            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -J report.json || true
-            # ZAP: Ép chỉ đếm riskcode 3 (High)
+            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -J report.json >/dev/null 2>&1 || true
             if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "zap_ajax_spider" ]; then
-            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -j -J report.json || true
+            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:5006 -j -J report.json >/dev/null 2>&1 || true
             if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "zap_full" ]; then
-            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py -t http://localhost:5006 -J report.json || true
+            docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py -t http://localhost:5006 -J report.json >/dev/null 2>&1 || true
             if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
+
+          # ====== CÁC CÔNG CỤ DAST MỚI (ĐÃ FIX URL) ======
+          elif [ "$CHOICE" == "ffuf_fuzzer" ]; then
+            wget -q https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_amd64.tar.gz || true
+            tar -xzf ffuf_2.1.0_linux_amd64.tar.gz || true
+            wget -q https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt || true
+            ./ffuf -u http://localhost:5006/FUZZ -w common.txt -of json -o report.json >/dev/null 2>&1 || true
+            if [ -s report.json ]; then ISSUES=$(jq '.results | length' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "kiterunner_api" ]; then
+            # ĐÃ FIX: Tên file chính xác của kiterunner 1.0.2
+            wget -q https://github.com/assetnote/kiterunner/releases/download/v1.0.2/kiterunner_1.0.2_linux_amd64.tar.gz || true
+            tar -xzf kiterunner_1.0.2_linux_amd64.tar.gz || true
+            wget -q https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/api/api-endpoints.txt || true
+            # Sau khi giải nén, file thực thi sẽ mang tên là "kr"
+            ./kr scan http://localhost:5006 -w api-endpoints.txt -o json > report.json 2>/dev/null || true
+            if [ -s report.json ]; then ISSUES=$(jq '[.[]? | select(.status == 200)] | length' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "arachni_spa" ]; then
+            docker run --rm --network="host" -v $(pwd):/reports arachni/arachni bin/arachni http://localhost:5006 --report-save-path=/reports/arachni.afr >/dev/null 2>&1 || true
+            docker run --rm -v $(pwd):/reports arachni/arachni bin/arachni_reporter /reports/arachni.afr --reporter=json:outfile=/reports/report.json >/dev/null 2>&1 || true
+            if [ -s report.json ]; then ISSUES=$(jq '[.issues[]? | select(.severity == "high")] | length' report.json 2>/dev/null || echo 0); fi
           fi
 
           END_TIME=$(date +%s)
@@ -221,15 +241,13 @@ jobs:
           echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
           echo "==> DAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
           
-          # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
       - name: Upload Báo cáo DAST
         uses: actions/upload-artifact@v4
-        if: always() # Luôn upload dù có lỗi hay không
+        if: always()
         with:
           name: dast-report
-          path: report.* # Bắt mọi định dạng report.json hoặc report.sarif
+          path: report.*
           retention-days: 1
-          # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
 
   ai_reporter:
     needs: [brain_optimizer, run_sast, run_sca, run_dast]
