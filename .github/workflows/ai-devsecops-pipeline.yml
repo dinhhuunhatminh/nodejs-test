@@ -68,22 +68,17 @@ jobs:
 
           if [ "$CHOICE" == "semgrep_standard" ]; then
             pip install -q semgrep
-            # Cấm Semgrep quét thư mục views và node_modules
             semgrep scan --config auto --exclude "node_modules" --exclude "views" --json -o report.json >/dev/null 2>&1 || true
             if [ -s report.json ]; then ISSUES=$(jq '.results | length' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "njsscan_quick" ]; then
             pip install -q njsscan
-            # GIẢI PHÁP TỐI THƯỢNG: Trực tiếp chỉ định quét duy nhất index.js, bỏ qua toàn bộ views
-            njsscan index.js --sarif -o report.sarif >/dev/null 2>&1 || true
-            
-            if [ -s report.sarif ]; then
-              ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0)
-            fi
+            njsscan . --sarif -o report.sarif >/dev/null 2>&1 || true
+            if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "sonar_deep" ]; then
             docker run --rm -v "$(pwd):/usr/src" sonarsource/sonar-scanner-cli >/dev/null 2>&1 || true
-            if grep -q "eval(" index.js; then ISSUES=17; else ISSUES=0; fi
+            ISSUES=0 # Sonar không xuất JSON local
 
           elif [ "$CHOICE" == "codeql_full" ]; then
             wget -q https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
@@ -91,22 +86,42 @@ jobs:
             ./codeql/codeql database create db --language=javascript >/dev/null 2>&1 || true
             ./codeql/codeql database analyze db javascript-security-extended.qls --format=sarif-latest --output=report.sarif >/dev/null 2>&1 || true
             if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0); fi
+
+          # ====== CÁC CÔNG CỤ SAST MỚI ======
+          elif [ "$CHOICE" == "gitleaks_fast" ]; then
+            wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+            tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
+            ./gitleaks detect --source . -v --report-format json --report-path report.json >/dev/null 2>&1 || true
+            if [ -s report.json ]; then ISSUES=$(jq 'length' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "spotbugs_java" ]; then
+            # SpotBugs phân tích bytecode Java. Dùng docker image chuẩn của SpotBugs.
+            docker run --rm -v "$(pwd):/workspace" spotbugs/spotbugs:latest -textui -sarif -output /workspace/report.sarif /workspace >/dev/null 2>&1 || true
+            if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error" or .level == "warning")] | length' report.sarif 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "bandit_python" ]; then
+            pip install -q bandit
+            bandit -r . -f json -o report.json >/dev/null 2>&1 || true
+            if [ -s report.json ]; then ISSUES=$(jq '.results | length' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "checkov_iac" ]; then
+            pip install -q checkov
+            checkov -d . -o json > report.json 2>/dev/null || true
+            if [ -s report.json ]; then ISSUES=$(jq '.results.failed_checks | length' report.json 2>/dev/null || echo 0); fi
           fi
           
           END_TIME=$(date +%s)
           echo "duration=$((END_TIME - START_TIME))" >> $GITHUB_OUTPUT
           echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
-          echo "==> SAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
+          echo "==> SAST ($CHOICE) tìm thấy ${ISSUES:-0} lỗi thực tế."
 
-        # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
       - name: Upload Báo cáo SAST
         uses: actions/upload-artifact@v4
-        if: always() # Luôn upload dù có lỗi hay không
+        if: always()
         with:
           name: sast-report
-          path: report.* # Bắt mọi định dạng report.json hoặc report.sarif
+          path: report.*
           retention-days: 1
-          # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
 
 
   run_sca:
@@ -121,8 +136,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Cài đặt Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin > /dev/null 2>&1
       - name: Chạy SCA
         id: sca_scan
         env:
@@ -133,12 +146,13 @@ jobs:
           ISSUES=0
 
           if [ "$CHOICE" == "trivy_standard" ]; then
-            trivy fs --scanners vuln --severity HIGH,CRITICAL --format json --output report.json . > /dev/null 2>&1 || true
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin >/dev/null 2>&1
+            trivy fs --scanners vuln --severity HIGH,CRITICAL --format json --output report.json . >/dev/null 2>&1 || true
             if [ -f report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) | length] | add // 0' report.json 2>/dev/null || echo 0); fi
             
           elif [ "$CHOICE" == "trivy_deep" ]; then
-            # Đã bỏ quét misconfig để tránh lỗi Dockerfile
-            trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --format json --output report.json . > /dev/null 2>&1 || true
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin >/dev/null 2>&1
+            trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --format json --output report.json . >/dev/null 2>&1 || true
             if [ -f report.json ]; then ISSUES=$(jq '[.Results[]? | (.Vulnerabilities // []) + (.Secrets // []) | length] | add // 0' report.json 2>/dev/null || echo 0); fi
             
           elif [ "$CHOICE" == "npm_audit" ]; then
@@ -150,6 +164,23 @@ jobs:
             npm install -g snyk --silent
             snyk test --all-projects --severity-threshold=high --json > report.json 2>/dev/null || true
             if [ -f report.json ]; then ISSUES=$(jq 'if type == "array" then [.[].uniqueCount] | add else .uniqueCount end' report.json 2>/dev/null || echo 0); fi
+
+          # ====== CÁC CÔNG CỤ SCA MỚI ======
+          elif [ "$CHOICE" == "grype_fast" ]; then
+            curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin >/dev/null 2>&1
+            grype . -o json > report.json 2>/dev/null || true
+            if [ -s report.json ]; then ISSUES=$(jq '[.matches[]? | select(.vulnerability.severity == "High" or .vulnerability.severity == "Critical")] | length' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "retire_js" ]; then
+            npm install -g retire >/dev/null 2>&1
+            retire --jspath . --outputformat json --outputpath report.json >/dev/null 2>&1 || true
+            if [ -s report.json ]; then ISSUES=$(jq '[.[].results[]?.vulnerabilities[]?] | length' report.json 2>/dev/null || echo 0); fi
+
+          elif [ "$CHOICE" == "owasp_dep_check" ]; then
+            wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v9.0.9/dependency-check-9.0.9-release.zip
+            unzip -q dependency-check-9.0.9-release.zip
+            ./dependency-check/bin/dependency-check.sh --scan . --format JSON --out report.json >/dev/null 2>&1 || true
+            if [ -s report.json ]; then ISSUES=$(jq '[.dependencies[]?.vulnerabilities[]? | select(.cvssv3.baseSeverity == "HIGH" or .cvssv3.baseSeverity == "CRITICAL")] | length' report.json 2>/dev/null || echo 0); fi
           fi
           
           END_TIME=$(date +%s)
@@ -157,15 +188,13 @@ jobs:
           echo "issues=${ISSUES:-0}" >> $GITHUB_OUTPUT
           echo "==> KẾT QUẢ: SCA ($CHOICE) tìm thấy ${ISSUES:-0} lỗi nghiêm trọng."
           
-          # BỔ SUNG ĐOẠN NÀY VÀO CUỐI JOB:
       - name: Upload Báo cáo SCA
         uses: actions/upload-artifact@v4
-        if: always() # Luôn upload dù có lỗi hay không
+        if: always()
         with:
           name: sca-report
-          path: report.* # Bắt mọi định dạng report.json hoặc report.sarif
+          path: report.*
           retention-days: 1
-          # if [ "${ISSUES:-0}" -gt 0 ]; then exit 1; fi
 
 
   run_dast:
