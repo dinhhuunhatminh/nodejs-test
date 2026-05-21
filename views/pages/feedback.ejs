@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Security Review - Feedback</title>
+  <link rel="stylesheet" href="/stylesheets/main.css">
+  <style>
+    body {
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+      background-color: #f6f8fa;
+      color: #24292f;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1012px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+    .header {
+      border-bottom: 1px solid #d0d7de;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      font-weight: 400;
+      font-size: 32px;
+    }
+    .timeline-item {
+      display: flex;
+      position: relative;
+      margin-top: 16px;
+      margin-bottom: 32px;
+    }
+    .timeline-item::before {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 16px;
+      display: block;
+      width: 2px;
+      content: "";
+      background-color: #d0d7de;
+      z-index: -1;
+    }
+    .timeline-avatar {
+      margin-right: 16px;
+      background-color: #f6f8fa;
+      padding-top: 5px;
+    }
+    .timeline-avatar img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid #d0d7de;
+      background-color: white;
+    }
+    .comment-box {
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background-color: #ffffff;
+      flex-grow: 1;
+      position: relative;
+    }
+    .comment-box::before {
+      position: absolute;
+      top: 11px;
+      right: 100%;
+      left: -8px;
+      display: block;
+      width: 8px;
+      height: 16px;
+      pointer-events: none;
+      content: " ";
+      clip-path: polygon(0 50%, 100% 0, 100% 100%);
+      background-color: #d0d7de;
+    }
+    .comment-box::after {
+      position: absolute;
+      top: 12px;
+      right: 100%;
+      left: -7px;
+      display: block;
+      width: 7px;
+      height: 14px;
+      pointer-events: none;
+      content: " ";
+      clip-path: polygon(0 50%, 100% 0, 100% 100%);
+      background-color: #f6f8fa;
+    }
+    .comment-header {
+      padding: 8px 16px;
+      background-color: #f6f8fa;
+      border-bottom: 1px solid #d0d7de;
+      border-top-left-radius: 6px;
+      border-top-right-radius: 6px;
+      color: #57606a;
+      display: flex;
+      justify-content: space-between;
+    }
+    .comment-header strong {
+      color: #24292f;
+    }
+    .comment-body {
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-wrap: break-word;
+    }
+    .comment-body pre {
+      background-color: #f6f8fa;
+      border-radius: 6px;
+      padding: 16px;
+      overflow: auto;
+    }
+    .comment-body code {
+      background-color: rgba(175,184,193,0.2);
+      border-radius: 6px;
+      padding: 0.2em 0.4em;
+      font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
+      font-size: 85%;
+    }
+    .comment-body pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 18px;
+      border: 1px solid transparent;
+      border-radius: 2em;
+      background-color: #1f883d;
+      color: #ffffff;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #57606a;
+      border: 1px dashed #d0d7de;
+      border-radius: 6px;
+      background-color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>AI Security Reviews</h1>
+      <p style="color: #57606a;">Feedback from Gemini LLM during DevSecOps Pipeline runs.</p>
+      <a href="/">Trang Chủ</a>
+    </div>
+
+    <div class="timeline">
+      <% if (reviews && reviews.length > 0) { %>
+        <% reviews.forEach(function(review) { %>
+          <div class="timeline-item">
+            <div class="timeline-avatar">
+              <!-- Avatar giả lập bot giống Github -->
+              <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="bot">
+            </div>
+            <div class="comment-box">
+              <div class="comment-header">
+                <div>
+                  <strong>github-actions<span style="color:#57606a; font-weight:normal;">[bot]</span></strong> 
+                  commented on <%= review.date %>
+                </div>
+                <div>
+                  <span class="badge">AI Review</span>
+                </div>
+              </div>
+              <div class="comment-body markdown-body">
+                <h3>Chiến lược Quét Tự Động</h3>
+                <ul>
+                  <li><strong>SAST:</strong> <%= review.sast_tool %></li>
+                  <li><strong>SCA:</strong> <%= review.sca_tool %></li>
+                  <li><strong>DAST:</strong> <%= review.dast_tool %></li>
+                </ul>
+                <hr>
+                <%- review.html_content %>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      <% } else { %>
+        <div class="empty-state">
+          <h3>Chưa có phản hồi nào</h3>
+          <p>Thuật toán tối ưu sẽ chạy qua Github Actions và tự động đẩy phản hồi bảo mật lên đây!</p>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</body>
+</html>

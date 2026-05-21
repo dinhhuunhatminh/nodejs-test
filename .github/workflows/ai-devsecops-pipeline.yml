@@ -311,11 +311,12 @@ jobs:
         continue-on-error: true
 
       - name: Cài đặt thư viện Python cho AI
-        run: pip install -q google-genai
+        run: pip install -q google-genai pymongo
 
       - name: AI Phân tích Lỗ hổng và Phản hồi
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
           # TRUYỀN QUYẾT ĐỊNH CỦA KNAPSACK VÀO PYTHON
           SAST_TOOL: ${{ needs.brain_optimizer.outputs.sast_choice }}
           SCA_TOOL: ${{ needs.brain_optimizer.outputs.sca_choice }}
@@ -401,6 +402,26 @@ jobs:
                   f.write('---\n\n')
                   f.write('### 🔍 Phân Tích Lỗ Hổng & Đề Xuất Sửa Lỗi\n\n')
                   f.write(response.text)
+                  
+              # ĐẨY KẾT QUẢ REIVEW LÊN MONGODB CHO WEB INTERFACE READ
+              try:
+                  import pymongo
+                  import datetime
+                  client = pymongo.MongoClient(os.environ['MONGO_URI'])
+                  db = client['devsecops']
+                  reviews_col = db['ai_reviews']
+                  review_doc = {
+                      "timestamp": datetime.datetime.utcnow(),
+                      "sast_tool": sast,
+                      "sca_tool": sca,
+                      "dast_tool": dast,
+                      "markdown_content": response.text,
+                      "pr_url": os.environ.get("GITHUB_SERVER_URL", "") + "/" + os.environ.get("GITHUB_REPOSITORY", "") + "/pull/" + os.environ.get("PR_NUMBER", "0") if os.environ.get("PR_NUMBER") else ""
+                  }
+                  reviews_col.insert_one(review_doc)
+                  print("Đã lưu kết quả LLM vào MongoDB để hiển thị trên web.")
+              except Exception as mongo_e:
+                  print(f"Lỗi khi lưu vào MongoDB: {mongo_e}")
                   
           except Exception as e:
               print(f'Lỗi hệ thống khi gọi Gemini API: {e}')
