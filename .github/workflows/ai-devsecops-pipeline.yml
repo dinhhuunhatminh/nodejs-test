@@ -311,13 +311,13 @@ jobs:
         continue-on-error: true
 
       - name: Cài đặt thư viện Python cho AI
-        run: pip install -q google-genai pymongo
+        run: pip install -q google-genai
 
       - name: AI Phân tích Lỗ hổng và Phản hồi
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          MONGO_URI: ${{ secrets.MONGO_URI }}
           # TRUYỀN QUYẾT ĐỊNH CỦA KNAPSACK VÀO PYTHON
+          MONGO_URI: ${{ secrets.MONGO_URI }}
           SAST_TOOL: ${{ needs.brain_optimizer.outputs.sast_choice }}
           SCA_TOOL: ${{ needs.brain_optimizer.outputs.sca_choice }}
           DAST_TOOL: ${{ needs.brain_optimizer.outputs.dast_choice }}
@@ -385,46 +385,42 @@ jobs:
               print(response.text)
               print('===========================================================')
               
-              # VẼ BẢNG KNAPSACK VÀ GHI VÀO ĐẦU FILE MARKDOWN
-              sast = os.environ.get("SAST_TOOL", "N/A")
-              sca = os.environ.get("SCA_TOOL", "N/A")
-              dast = os.environ.get("DAST_TOOL", "N/A")
+              # --- ĐOẠN CODE MỚI: ĐẨY LÊN MONGODB ---
+              import pymongo
+              import datetime
+              
+              # Lấy thông tin ngữ cảnh từ GitHub Actions
+              repo_name = os.environ.get("GITHUB_REPOSITORY", "unknown-repo").split('/')[-1]
+              commit_sha = os.environ.get("GITHUB_SHA", "unknown-commit")[:7] # Lấy 7 số đầu cho gọn
+              
+              sast_tool = os.environ.get("SAST_TOOL", "N/A")
+              sca_tool = os.environ.get("SCA_TOOL", "N/A")
+              dast_tool = os.environ.get("DAST_TOOL", "N/A")
 
-              with open('ai_review.md', 'w', encoding='utf-8') as f:
-                  f.write('## Smart DevSecOps - Báo Cáo Bảo Mật\n\n')
-                  f.write('### Chiến lược Quét Tự Động (Knapsack Optimizer)\n')
-                  f.write('Hệ thống AI đã đánh giá ngân sách thời gian và tự động lựa chọn các công cụ tối ưu nhất cho lần chạy này:\n\n')
-                  f.write('| Lớp Bảo Mật | Công Cụ Được Điều Động |\n')
-                  f.write('| :--- | :--- |\n')
-                  f.write(f'| **SAST** (Mã nguồn) | `{sast}` |\n')
-                  f.write(f'| **SCA** (Thư viện) | `{sca}` |\n')
-                  f.write(f'| **DAST** (Động) | `{dast}` |\n\n')
-                  f.write('---\n\n')
-                  f.write('### 🔍 Phân Tích Lỗ Hổng & Đề Xuất Sửa Lỗi\n\n')
-                  f.write(response.text)
-                  
-              # ĐẨY KẾT QUẢ REIVEW LÊN MONGODB CHO WEB INTERFACE READ
-              try:
-                  import pymongo
-                  import datetime
-                  client = pymongo.MongoClient(os.environ['MONGO_URI'])
-                  db = client['devsecops']
-                  reviews_col = db['ai_reviews']
-                  review_doc = {
-                      "timestamp": datetime.datetime.utcnow(),
-                      "sast_tool": sast,
-                      "sca_tool": sca,
-                      "dast_tool": dast,
-                      "markdown_content": response.text,
-                      "pr_url": os.environ.get("GITHUB_SERVER_URL", "") + "/" + os.environ.get("GITHUB_REPOSITORY", "") + "/pull/" + os.environ.get("PR_NUMBER", "0") if os.environ.get("PR_NUMBER") else ""
-                  }
-                  reviews_col.insert_one(review_doc)
-                  print("Đã lưu kết quả LLM vào MongoDB để hiển thị trên web.")
-              except Exception as mongo_e:
-                  print(f"Lỗi khi lưu vào MongoDB: {mongo_e}")
+              # Đóng gói dữ liệu chuẩn bị đẩy lên
+              report_data = {
+                  "repo_name": repo_name,
+                  "commit_sha": commit_sha,
+                  "timestamp": datetime.datetime.utcnow(),
+                  "knapsack": {
+                      "sast": sast_tool,
+                      "sca": sca_tool,
+                      "dast": dast_tool
+                  },
+                  "ai_report": response.text
+              }
+
+              # Ghi vào collection 'scan_reports'
+              mongo_client = pymongo.MongoClient(os.environ['MONGO_URI'])
+              db = mongo_client['devsecops']
+              collection = db['scan_reports']
+              collection.insert_one(report_data)
+              
+              print("✅ Đã đẩy báo cáo AI lên MongoDB (collection: scan_reports) thành công!")
+              # --------------------------------------
                   
           except Exception as e:
-              print(f'Lỗi hệ thống khi gọi Gemini API: {e}')
+              print(f'Lỗi hệ thống khi gọi Gemini API hoặc lưu MongoDB: {e}')
           EOF
 
       - name: Đăng toàn bộ báo cáo lên PR Conversation
