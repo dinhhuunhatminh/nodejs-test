@@ -16,12 +16,12 @@ MongoClient.connect(MONGO_URI)
   })
   .catch(err => console.error(err));
 
-// DÒNG NÀY ĐỂ TEST BOT REVIEW CODE:
-const DUMMY_SECRET = "AIzaSyB-abcdefghijklmnopqrstuvwxyz123456";
-const DB_PASSWORD = "super_secret_admin_123456";
-// Cố tình gài thêm lỗi thực thi mã nguy hiểm
-const user_input = "console.log('Hacked!')";
-eval(user_input);
+// // DÒNG NÀY ĐỂ TEST BOT REVIEW CODE:
+// const DUMMY_SECRET = "AIzaSyB-abcdefghijklmnopqrstuvwxyz123456";
+// const DB_PASSWORD = "super_secret_admin_123456";
+// // Cố tình gài thêm lỗi thực thi mã nguy hiểm
+// const user_input = "console.log('Hacked!')";
+// eval(user_input);
 
 
 app.use(helmet()) 
