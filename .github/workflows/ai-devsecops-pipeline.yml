@@ -29,8 +29,8 @@ jobs:
   brain_optimizer:
     runs-on: ubuntu-latest
     outputs:
-      # Lấy force_sast từ Web, nếu Web không truyền thì mới dùng thuật toán của Python
-      sast_choice: ${{ github.event.inputs.force_sast || steps.think.outputs.sast_choice }}
+      # Lấy trực tiếp từ bước think (đã được xử lý ghi đè bên dưới)
+      sast_choice: ${{ steps.think.outputs.sast_choice }}
       sca_choice: ${{ steps.think.outputs.sca_choice }}
       dast_choice: ${{ steps.think.outputs.dast_choice }}
     steps:
@@ -48,14 +48,27 @@ jobs:
           python-version: '3.10'
       - name: Cài MongoDB Driver
         run: pip install -q pymongo certifi
-      - name: Chạy Thuật toán Tối ưu
+      - name: Chạy Thuật toán Tối ưu và Xử lý Lệnh Ép buộc
         id: think
         env:
           TIME_BUDGET: 5400
           LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
           SELECTED_LAYERS: ${{ github.event.inputs.selected_layers || 'SAST,SCA,DAST' }}
-        run: python dp_optimizer_2.py
+        run: |
+          # 1. Cho AI chạy toán tối ưu bình thường
+          python dp_optimizer_2.py
+          
+          # 2. KIỂM TRA LỆNH ÉP TỪ WEB VÀ GHI ĐÈ
+          FORCE_SAST="${{ github.event.inputs.force_sast }}"
+          if [ -n "$FORCE_SAST" ]; then
+            # Ép lại biến môi trường gửi sang job khác
+            echo "sast_choice=$FORCE_SAST" >> $GITHUB_OUTPUT
+            echo "=========================================================="
+            echo "WEB ĐIỀU KHIỂN: Đã hủy lệnh của thuật toán!"
+            echo "Ghi đè công cụ SAST thành: $FORCE_SAST"
+            echo "=========================================================="
+          fi
 
   run_sast:
     needs: brain_optimizer
@@ -290,7 +303,7 @@ jobs:
 
   ai_reporter:
     needs: [brain_optimizer, run_sast, run_sca, run_dast]
-    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
