@@ -22,6 +22,14 @@ on:
         description: 'Ép chạy SAST (VD: semgrep_standard) - Bỏ qua thuật toán'
         required: false
         type: string
+      force_sca:
+        description: 'Ép chạy SCA'
+        required: false
+        type: string
+      force_dast:
+        description: 'Ép chạy DAST'
+        required: false
+        type: string
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -59,16 +67,29 @@ jobs:
           # 1. Cho AI chạy toán tối ưu bình thường
           python dp_optimizer_2.py
           
-          # 2. KIỂM TRA LỆNH ÉP TỪ WEB VÀ GHI ĐÈ
+          run: |
+          # 1. Cho AI chạy toán tối ưu bình thường
+          python dp_optimizer_2.py
+          
+          # 2. KIỂM TRA LỆNH ÉP TỪ WEB VÀ GHI ĐÈ CHO CẢ 3 LỚP
           FORCE_SAST="${{ github.event.inputs.force_sast }}"
+          FORCE_SCA="${{ github.event.inputs.force_sca }}"
+          FORCE_DAST="${{ github.event.inputs.force_dast }}"
+          
+          echo "=========================================================="
           if [ -n "$FORCE_SAST" ]; then
-            # Ép lại biến môi trường gửi sang job khác
             echo "sast_choice=$FORCE_SAST" >> $GITHUB_OUTPUT
-            echo "=========================================================="
-            echo "WEB ĐIỀU KHIỂN: Đã hủy lệnh của thuật toán!"
-            echo "Ghi đè công cụ SAST thành: $FORCE_SAST"
-            echo "=========================================================="
+            echo "WEB ĐIỀU KHIỂN: Ghi đè SAST thành -> $FORCE_SAST"
           fi
+          if [ -n "$FORCE_SCA" ]; then
+            echo "sca_choice=$FORCE_SCA" >> $GITHUB_OUTPUT
+            echo "WEB ĐIỀU KHIỂN: Ghi đè SCA thành -> $FORCE_SCA"
+          fi
+          if [ -n "$FORCE_DAST" ]; then
+            echo "dast_choice=$FORCE_DAST" >> $GITHUB_OUTPUT
+            echo "WEB ĐIỀU KHIỂN: Ghi đè DAST thành -> $FORCE_DAST"
+          fi
+          echo "=========================================================="
 
   run_sast:
     needs: brain_optimizer
