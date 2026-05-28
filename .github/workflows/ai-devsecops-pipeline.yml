@@ -9,10 +9,19 @@ on:
     inputs:
       selected_layers:
         description: 'Chọn các lớp bảo mật (VD: SAST,SCA,DAST)'
-        required: true
+        required: false #true
         default: 'SAST,SCA,DAST'
         type: string
-
+        #THÊM 2 INPUT MỚI ĐỂ NHẬN LỆNH TỪ WEB 
+      ai_prompt_type:
+        description: 'Kịch bản AI (default | focus_vuln | explain_detail)'
+        required: false
+        default: 'default'
+        type: string
+      force_sast:
+        description: 'Ép chạy SAST (VD: semgrep_standard) - Bỏ qua thuật toán'
+        required: false
+        type: string
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -20,7 +29,8 @@ jobs:
   brain_optimizer:
     runs-on: ubuntu-latest
     outputs:
-      sast_choice: ${{ steps.think.outputs.sast_choice }}
+      # Lấy force_sast từ Web, nếu Web không truyền thì mới dùng thuật toán của Python
+      sast_choice: ${{ github.event.inputs.force_sast || steps.think.outputs.sast_choice }}
       sca_choice: ${{ steps.think.outputs.sca_choice }}
       dast_choice: ${{ steps.think.outputs.dast_choice }}
     steps:
@@ -320,6 +330,8 @@ jobs:
           SAST_TOOL: ${{ needs.brain_optimizer.outputs.sast_choice }}
           SCA_TOOL: ${{ needs.brain_optimizer.outputs.sca_choice }}
           DAST_TOOL: ${{ needs.brain_optimizer.outputs.dast_choice }}
+          # Truyền kịch bản AI vào môi trường Python
+          AI_PROMPT_TYPE: ${{ github.event.inputs.ai_prompt_type || 'default' }}
         run: |
           python - << 'EOF'
           from google import genai
@@ -356,8 +368,17 @@ jobs:
               except Exception:
                   pass
 
+          # TIỀN XỬ LÝ LỰA CHỌN CỦA NGƯỜI DÙNG TỪ WEB
+          prompt_type = os.environ.get('AI_PROMPT_TYPE', 'default')
+          if prompt_type == 'focus_vuln':
+              sys_msg = "Bạn là chuyên gia DevSecOps bảo mật cao. CHỈ TẬP TRUNG TÌM VÀ CẢNH BÁO CÁC LỖ HỔNG NGHIÊM TRỌNG (SQLi, XSS, Hardcoded Secrets). Bỏ qua các lỗi vặt."
+          elif prompt_type == 'explain_detail':
+              sys_msg = "Bạn là giảng viên an toàn thông tin. Hãy giải thích các lỗi bảo mật thật chi tiết, từng dòng code như đang dạy cho sinh viên mới học."
+          else:
+              sys_msg = "Bạn là một chuyên gia DevSecOps. Đánh giá mã nguồn và kết quả quét bảo mật một cách chuyên nghiệp."
+
           prompt = f'''
-          Bạn là một chuyên gia DevSecOps. 
+          {sys_msg}
           Dưới đây là TOÀN BỘ mã nguồn của dự án và kết quả quét từ các công cụ bảo mật.
 
           MÃ NGUỒN DỰ ÁN:
