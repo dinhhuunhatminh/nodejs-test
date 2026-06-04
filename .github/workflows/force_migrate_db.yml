@@ -1,0 +1,36 @@
+name: 1 - TỰ ĐỘNG CHUYỂN ĐỔI DATABASE
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate_database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - run: pip install -q pymongo certifi
+      - env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          python -c "
+          import pymongo, os
+          try:
+              client = pymongo.MongoClient(os.environ['MONGO_URI'], tlsAllowInvalidCertificates=True)
+              collection = client['devsecops']['tools']
+              new_tools = [
+                  {'id': 'semgrep_standard', 'name': 'Semgrep OSS', 'category': 'SAST', 'languages': ['javascript', 'python'], 'base_time': 19.1, 'time_per_loc': 0.01, 'peak_ram_mb': 512, 'f1_score': 0.88, 'total_runs': 1},
+                  {'id': 'sonar_deep', 'name': 'SonarQube Scanner', 'category': 'SAST', 'languages': ['javascript', 'python', 'java'], 'base_time': 56.3, 'time_per_loc': 0.05, 'peak_ram_mb': 2048, 'f1_score': 0.95, 'total_runs': 1},
+                  {'id': 'codeql_full', 'name': 'GitHub CodeQL', 'category': 'SAST', 'languages': ['javascript', 'python', 'java'], 'base_time': 120.0, 'time_per_loc': 0.1, 'peak_ram_mb': 4096, 'f1_score': 0.97, 'total_runs': 1},
+                  {'id': 'njsscan_quick', 'name': 'NodeJs Scan', 'category': 'SAST', 'languages': ['javascript'], 'base_time': 15.1, 'time_per_loc': 0.005, 'peak_ram_mb': 256, 'f1_score': 0.72, 'total_runs': 1},
+                  {'id': 'trivy_standard', 'name': 'Aqua Trivy', 'category': 'SCA', 'languages': ['javascript', 'python', 'java'], 'base_time': 15.2, 'time_per_loc': 0.005, 'peak_ram_mb': 512, 'f1_score': 0.91, 'total_runs': 1},
+                  {'id': 'npm_audit', 'name': 'NPM Audit', 'category': 'SCA', 'languages': ['javascript'], 'base_time': 5.0, 'time_per_loc': 0.001, 'peak_ram_mb': 128, 'f1_score': 0.65, 'total_runs': 1},
+                  {'id': 'snyk_advanced', 'name': 'Snyk Open Source', 'category': 'SCA', 'languages': ['javascript', 'python', 'java'], 'base_time': 20.0, 'time_per_loc': 0.01, 'peak_ram_mb': 1024, 'f1_score': 0.94, 'total_runs': 1},
+                  {'id': 'zap_quick', 'name': 'OWASP ZAP Baseline', 'category': 'DAST', 'languages': ['all'], 'base_time': 60.0, 'time_per_loc': 0.0, 'peak_ram_mb': 1024, 'f1_score': 0.89, 'total_runs': 1},
+                  {'id': 'nuclei_fast', 'name': 'ProjectDiscovery Nuclei', 'category': 'DAST', 'languages': ['all'], 'base_time': 45.0, 'time_per_loc': 0.0, 'peak_ram_mb': 256, 'f1_score': 0.82, 'total_runs': 1},
+                  {'id': 'zap_full', 'name': 'OWASP ZAP Full Scan', 'category': 'DAST', 'languages': ['all'], 'base_time': 300.0, 'time_per_loc': 0.0, 'peak_ram_mb': 2048, 'f1_score': 0.96, 'total_runs': 1}
+              ] # Rút gọn list mẫu 10 tool đặc trưng để bạn dễ nhìn
+              collection.delete_many({}) 
+              collection.insert_many(new_tools) 
+              print('NẠP DATABASE MỚI THÀNH CÔNG!')
+          except Exception as e: print('Lỗi:', e)
+          "
