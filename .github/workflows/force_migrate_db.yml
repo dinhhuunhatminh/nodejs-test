@@ -1,4 +1,4 @@
-name: 1 - TỰ ĐỘNG CHUYỂN ĐỔI DATABASE
+name: 1 - TỰ ĐỘNG CHUYỂN ĐỔI DATABASE (FULL 25 TOOLS)
 on:
   workflow_dispatch:
 
@@ -7,9 +7,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-python@v5
-        with: { python-version: '3.10' }
-      - run: pip install -q pymongo certifi
-      - env:
+        with:
+          python-version: '3.10'
+          
+      - name: Cài đặt MongoDB Driver
+        run: pip install -q pymongo certifi
+        
+      - name: Ghi đè 25 công cụ chuẩn ILP lên MongoDB
+        env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
           python -c "
@@ -17,20 +22,46 @@ jobs:
           try:
               client = pymongo.MongoClient(os.environ['MONGO_URI'], tlsAllowInvalidCertificates=True)
               collection = client['devsecops']['tools']
+              
               new_tools = [
-                  {'id': 'semgrep_standard', 'name': 'Semgrep OSS', 'category': 'SAST', 'languages': ['javascript', 'python'], 'base_time': 19.1, 'time_per_loc': 0.01, 'peak_ram_mb': 512, 'f1_score': 0.88, 'total_runs': 1},
-                  {'id': 'sonar_deep', 'name': 'SonarQube Scanner', 'category': 'SAST', 'languages': ['javascript', 'python', 'java'], 'base_time': 56.3, 'time_per_loc': 0.05, 'peak_ram_mb': 2048, 'f1_score': 0.95, 'total_runs': 1},
-                  {'id': 'codeql_full', 'name': 'GitHub CodeQL', 'category': 'SAST', 'languages': ['javascript', 'python', 'java'], 'base_time': 120.0, 'time_per_loc': 0.1, 'peak_ram_mb': 4096, 'f1_score': 0.97, 'total_runs': 1},
-                  {'id': 'njsscan_quick', 'name': 'NodeJs Scan', 'category': 'SAST', 'languages': ['javascript'], 'base_time': 15.1, 'time_per_loc': 0.005, 'peak_ram_mb': 256, 'f1_score': 0.72, 'total_runs': 1},
-                  {'id': 'trivy_standard', 'name': 'Aqua Trivy', 'category': 'SCA', 'languages': ['javascript', 'python', 'java'], 'base_time': 15.2, 'time_per_loc': 0.005, 'peak_ram_mb': 512, 'f1_score': 0.91, 'total_runs': 1},
-                  {'id': 'npm_audit', 'name': 'NPM Audit', 'category': 'SCA', 'languages': ['javascript'], 'base_time': 5.0, 'time_per_loc': 0.001, 'peak_ram_mb': 128, 'f1_score': 0.65, 'total_runs': 1},
-                  {'id': 'snyk_advanced', 'name': 'Snyk Open Source', 'category': 'SCA', 'languages': ['javascript', 'python', 'java'], 'base_time': 20.0, 'time_per_loc': 0.01, 'peak_ram_mb': 1024, 'f1_score': 0.94, 'total_runs': 1},
-                  {'id': 'zap_quick', 'name': 'OWASP ZAP Baseline', 'category': 'DAST', 'languages': ['all'], 'base_time': 60.0, 'time_per_loc': 0.0, 'peak_ram_mb': 1024, 'f1_score': 0.89, 'total_runs': 1},
-                  {'id': 'nuclei_fast', 'name': 'ProjectDiscovery Nuclei', 'category': 'DAST', 'languages': ['all'], 'base_time': 45.0, 'time_per_loc': 0.0, 'peak_ram_mb': 256, 'f1_score': 0.82, 'total_runs': 1},
-                  {'id': 'zap_full', 'name': 'OWASP ZAP Full Scan', 'category': 'DAST', 'languages': ['all'], 'base_time': 300.0, 'time_per_loc': 0.0, 'peak_ram_mb': 2048, 'f1_score': 0.96, 'total_runs': 1}
-              ] # Rút gọn list mẫu 10 tool đặc trưng để bạn dễ nhìn
+                  # ================= LỚP SAST (10 CÔNG CỤ) =================
+                  {'id': 'semgrep_standard', 'name': 'Semgrep OSS', 'category': 'SAST', 'languages': ['javascript', 'python', 'java', 'go', 'typescript'], 'base_time': 15.0, 'time_per_loc': 0.01, 'peak_ram_mb': 512, 'f1_score': 0.88, 'total_runs': 1},
+                  {'id': 'sonar_deep', 'name': 'SonarQube Scanner', 'category': 'SAST', 'languages': ['javascript', 'python', 'java', 'typescript', 'csharp'], 'base_time': 45.0, 'time_per_loc': 0.05, 'peak_ram_mb': 2048, 'f1_score': 0.95, 'total_runs': 1},
+                  {'id': 'codeql_full', 'name': 'GitHub CodeQL', 'category': 'SAST', 'languages': ['javascript', 'python', 'java', 'c', 'cpp', 'go'], 'base_time': 120.0, 'time_per_loc': 0.1, 'peak_ram_mb': 4096, 'f1_score': 0.97, 'total_runs': 1},
+                  {'id': 'njsscan_quick', 'name': 'NodeJs Scan', 'category': 'SAST', 'languages': ['javascript', 'typescript'], 'base_time': 5.0, 'time_per_loc': 0.005, 'peak_ram_mb': 256, 'f1_score': 0.72, 'total_runs': 1},
+                  {'id': 'gitleaks_fast', 'name': 'Gitleaks (Secrets)', 'category': 'SAST', 'languages': ['all'], 'base_time': 3.0, 'time_per_loc': 0.001, 'peak_ram_mb': 128, 'f1_score': 0.92, 'total_runs': 1},
+                  {'id': 'spotbugs_java', 'name': 'SpotBugs', 'category': 'SAST', 'languages': ['java'], 'base_time': 25.0, 'time_per_loc': 0.02, 'peak_ram_mb': 1024, 'f1_score': 0.85, 'total_runs': 1},
+                  {'id': 'bandit_python', 'name': 'Bandit', 'category': 'SAST', 'languages': ['python'], 'base_time': 5.0, 'time_per_loc': 0.005, 'peak_ram_mb': 128, 'f1_score': 0.82, 'total_runs': 1},
+                  {'id': 'checkov_iac', 'name': 'Checkov (IaC)', 'category': 'SAST', 'languages': ['yaml', 'json', 'terraform'], 'base_time': 10.0, 'time_per_loc': 0.01, 'peak_ram_mb': 256, 'f1_score': 0.89, 'total_runs': 1},
+                  {'id': 'brakeman_ruby', 'name': 'Brakeman', 'category': 'SAST', 'languages': ['ruby'], 'base_time': 8.0, 'time_per_loc': 0.01, 'peak_ram_mb': 256, 'f1_score': 0.84, 'total_runs': 1},
+                  {'id': 'phpcs_security', 'name': 'PHPCS Security', 'category': 'SAST', 'languages': ['php'], 'base_time': 6.0, 'time_per_loc': 0.01, 'peak_ram_mb': 256, 'f1_score': 0.78, 'total_runs': 1},
+                  
+                  # ================= LỚP SCA (8 CÔNG CỤ) =================
+                  {'id': 'trivy_standard', 'name': 'Aqua Trivy (Standard)', 'category': 'SCA', 'languages': ['javascript', 'python', 'java', 'go', 'ruby'], 'base_time': 10.0, 'time_per_loc': 0.005, 'peak_ram_mb': 512, 'f1_score': 0.91, 'total_runs': 1},
+                  {'id': 'trivy_deep', 'name': 'Aqua Trivy (Deep Scan)', 'category': 'SCA', 'languages': ['javascript', 'python', 'java', 'go', 'ruby'], 'base_time': 20.0, 'time_per_loc': 0.01, 'peak_ram_mb': 1024, 'f1_score': 0.94, 'total_runs': 1},
+                  {'id': 'npm_audit', 'name': 'NPM Audit', 'category': 'SCA', 'languages': ['javascript', 'typescript'], 'base_time': 5.0, 'time_per_loc': 0.001, 'peak_ram_mb': 128, 'f1_score': 0.65, 'total_runs': 1},
+                  {'id': 'snyk_advanced', 'name': 'Snyk Open Source', 'category': 'SCA', 'languages': ['javascript', 'python', 'java', 'ruby'], 'base_time': 15.0, 'time_per_loc': 0.01, 'peak_ram_mb': 1024, 'f1_score': 0.95, 'total_runs': 1},
+                  {'id': 'grype_fast', 'name': 'Anchore Grype', 'category': 'SCA', 'languages': ['javascript', 'python', 'java'], 'base_time': 8.0, 'time_per_loc': 0.005, 'peak_ram_mb': 256, 'f1_score': 0.88, 'total_runs': 1},
+                  {'id': 'retire_js', 'name': 'Retire.js', 'category': 'SCA', 'languages': ['javascript', 'typescript'], 'base_time': 6.0, 'time_per_loc': 0.005, 'peak_ram_mb': 256, 'f1_score': 0.75, 'total_runs': 1},
+                  {'id': 'owasp_dep_check', 'name': 'OWASP Dependency Check', 'category': 'SCA', 'languages': ['java', 'javascript', 'python'], 'base_time': 40.0, 'time_per_loc': 0.05, 'peak_ram_mb': 2048, 'f1_score': 0.89, 'total_runs': 1},
+                  {'id': 'safety_python', 'name': 'Safety', 'category': 'SCA', 'languages': ['python'], 'base_time': 5.0, 'time_per_loc': 0.002, 'peak_ram_mb': 128, 'f1_score': 0.85, 'total_runs': 1},
+                  
+                  # ================= LỚP DAST (7 CÔNG CỤ - BLACKBOX MẠNG) =================
+                  {'id': 'nuclei_fast', 'name': 'ProjectDiscovery Nuclei', 'category': 'DAST', 'languages': ['all'], 'base_time': 20.0, 'time_per_loc': 0.0, 'peak_ram_mb': 256, 'f1_score': 0.82, 'total_runs': 1},
+                  {'id': 'zap_quick', 'name': 'OWASP ZAP Baseline', 'category': 'DAST', 'languages': ['all'], 'base_time': 45.0, 'time_per_loc': 0.0, 'peak_ram_mb': 1024, 'f1_score': 0.89, 'total_runs': 1},
+                  {'id': 'zap_ajax_spider', 'name': 'ZAP AJAX Spider', 'category': 'DAST', 'languages': ['all'], 'base_time': 120.0, 'time_per_loc': 0.0, 'peak_ram_mb': 1536, 'f1_score': 0.92, 'total_runs': 1},
+                  {'id': 'zap_full', 'name': 'OWASP ZAP Full Scan', 'category': 'DAST', 'languages': ['all'], 'base_time': 300.0, 'time_per_loc': 0.0, 'peak_ram_mb': 2048, 'f1_score': 0.96, 'total_runs': 1},
+                  {'id': 'ffuf_fuzzer', 'name': 'FFUF Web Fuzzer', 'category': 'DAST', 'languages': ['all'], 'base_time': 25.0, 'time_per_loc': 0.0, 'peak_ram_mb': 512, 'f1_score': 0.78, 'total_runs': 1},
+                  {'id': 'kiterunner_api', 'name': 'Kiterunner API', 'category': 'DAST', 'languages': ['all'], 'base_time': 30.0, 'time_per_loc': 0.0, 'peak_ram_mb': 512, 'f1_score': 0.85, 'total_runs': 1},
+                  {'id': 'arachni_spa', 'name': 'Arachni SPA Scanner', 'category': 'DAST', 'languages': ['all'], 'base_time': 150.0, 'time_per_loc': 0.0, 'peak_ram_mb': 1024, 'f1_score': 0.90, 'total_runs': 1}
+              ]
+              
+              # Dọn dẹp sạch sẽ collection cũ và nạp 25 documents mới
               collection.delete_many({}) 
               collection.insert_many(new_tools) 
-              print('NẠP DATABASE MỚI THÀNH CÔNG!')
-          except Exception as e: print('Lỗi:', e)
+              
+              print('✅ XUẤT SẮC! ĐÃ DỌN SẠCH DB CŨ VÀ NẠP ĐỦ 25 CÔNG CỤ VỚI THÔNG SỐ R&D CHUẨN MỰC.')
+              
+          except Exception as e: 
+              print('❌ Lỗi:', e)
           "
