@@ -2,111 +2,116 @@ import pymongo
 import os
 import sys
 
-def solve_knapsack(tools_list, time_limit, loc):
-    # 1. Tính toán thời gian thực tế (Weight) và làm tròn thành số nguyên
-    for tool in tools_list:
-        tool['actual_time'] = int(tool['base_time'] + (tool['time_per_loc'] * loc))
-
-    n = len(tools_list)
-    capacity = int(time_limit)
+def evaluate_combination(sast_tool, sca_tool, dast_tool, loc, time_limit, ram_limit):
+    """
+    Hàm tính toán Mục tiêu (Objective Function) và Ràng buộc (Constraints)
+    """
+    combo = [sast_tool, sca_tool, dast_tool]
+    total_time = 0
+    total_score = 0
     
-    # Bảng DP lưu điểm số tối đa
-    dp = [[0 for x in range(capacity + 1)] for x in range(n + 1)]
-    
-    # 2. Xây dựng bảng quy hoạch động
-    for i in range(1, n + 1):
-        for w in range(1, capacity + 1):
-            tool = tools_list[i-1]
-            if tool['actual_time'] <= w:
-                dp[i][w] = max(dp[i-1][w], dp[i-1][w - tool['actual_time']] + tool['v_score'])
-            else:
-                dp[i][w] = dp[i-1][w]
-
-    # 3. Truy vết để lấy danh sách công cụ được chọn
-    res = dp[n][capacity]
-    w = capacity
-    selected_tools = []
-    
-    for i in range(n, 0, -1):
-        if res <= 0:
-            break
-        if res == dp[i - 1][w]:
+    for tool in combo:
+        if tool['id'] == 'skip': 
             continue
-        else:
-            tool = tools_list[i - 1]
-            selected_tools.append(tool)
-            res = res - tool['v_score']
-            w = w - tool['actual_time']
+        
+        # Ước lượng chi phí thời gian dựa trên LOC (Lines of Code)
+        actual_time = tool['base_time'] + (tool['time_per_loc'] * loc)
+        total_time += actual_time
+        
+        # Cộng dồn Điểm Giá trị Bảo mật (F1-Score)
+        total_score += tool['f1_score'] * 100
+        
+        # RÀNG BUỘC PHẦN CỨNG (Hard Constraint):
+        # Vì 3 job chạy song song trên 3 Runner độc lập, ta check giới hạn RAM của từng Tool.
+        # Nếu bất kỳ tool nào vượt RAM máy chủ -> Tổ hợp này vô giá trị (Return -1)
+        if tool['peak_ram_mb'] > ram_limit:
+            return -1, 0
             
-    return selected_tools, dp[n][capacity], sum(t['actual_time'] for t in selected_tools)
+    # RÀNG BUỘC NGÂN SÁCH (Budget Constraint):
+    # Tổng thời gian (Billable CI/CD minutes) không được vượt giới hạn quản trị viên cấp
+    if total_time > time_limit:
+        return -1, 0
+        
+    return total_score, total_time
 
 def main():
-    # Lấy tham số từ môi trường
+    # 1. THU THẬP BIẾN SỐ MÔI TRƯỜNG (Context Parameters)
+    TIME_BUDGET = int(os.environ.get('TIME_BUDGET', 300))
+    LOC_CHANGED = int(os.environ.get('LOC_CHANGED', 100))
+    RAM_LIMIT = int(os.environ.get('RAM_LIMIT', 4096))
+    
+    # Mô phỏng Auto-detect ngôn ngữ (Trong tương lai lấy từ GitHub API)
+    repo_langs = ['javascript', 'python'] 
+
+    # 2. TRUY VẤN CƠ SỞ DỮ LIỆU THỰC CHỨNG
     try:
-        TIME_BUDGET = int(os.environ.get('TIME_BUDGET', 300))
-        LOC_CHANGED = int(os.environ.get('LOC_CHANGED', 100))
-        # Đọc danh sách các lớp bảo mật người dùng muốn chạy
-        selected_layers_str = os.environ.get('SELECTED_LAYERS', 'SAST,SCA,DAST') 
-    except:
-        TIME_BUDGET, LOC_CHANGED = 300, 100
-        selected_layers_str = 'SAST,SCA,DAST'
+        client = pymongo.MongoClient(os.environ.get('MONGO_URI'), tlsAllowInvalidCertificates=True)
+        db = client['devsecops']
+        all_tools = list(db['tools'].find({}))
+    except Exception as e:
+        print(f"❌ Lỗi kết nối CSDL: {e}")
+        sys.exit(1)
 
-    # Xử lý chuỗi đầu vào thành mảng (VD: "SAST, SCA" -> ['SAST', 'SCA'])
-    target_layers = [layer.strip().upper() for layer in selected_layers_str.split(',') if layer.strip()]
-    if not target_layers:
-        target_layers = ['SAST', 'SCA', 'DAST']
+    # 3. BỘ LỌC CỨNG (Language & Category Filtering)
+    sast_pool, sca_pool, dast_pool = [], [], []
+    
+    for tool in all_tools:
+        # CHÌA KHÓA MỞ RỘNG: Chấp nhận công cụ có tag "all" (Black-box DAST/Secrets)
+        is_supported = ("all" in tool['languages']) or any(l in tool['languages'] for l in repo_langs)
+        
+        if is_supported:
+            if tool['category'] == 'SAST': sast_pool.append(tool)
+            elif tool['category'] == 'SCA': sca_pool.append(tool)
+            elif tool['category'] == 'DAST': dast_pool.append(tool)
 
-    # Kết nối MongoDB 
-    client = pymongo.MongoClient(os.environ.get('MONGO_URI'), tlsAllowInvalidCertificates=True)
-    db = client['devsecops']
-    data = db['tools'].find_one()
+    # Khởi tạo Biến Quyết định "Không Chọn" (Skip)
+    skip_tool = {'id': 'skip', 'name': 'Bỏ qua', 'base_time': 0, 'time_per_loc': 0, 'peak_ram_mb': 0, 'f1_score': 0}
+    sast_pool.append(skip_tool)
+    sca_pool.append(skip_tool)
+    dast_pool.append(skip_tool)
 
-    results = {}
-    summary_table = []
+    # 4. ĐỘNG CƠ QUY HOẠCH TOÀN CỤC (ILP State-Space Search)
+    best_score = -1
+    best_combo = None
+    best_time = 0
 
-    # Phân bổ lại ngân sách động (Chỉ chia ngân sách cho những lớp được chọn)
-    layer_budget = TIME_BUDGET / len(target_layers)
+    # Không gian tìm kiếm: (N_sast + 1) * (N_sca + 1) * (N_dast + 1)
+    # Tốc độ thực thi: Vài phần ngàn giây (Microseconds)
+    for sast in sast_pool:
+        for sca in sca_pool:
+            for dast in dast_pool:
+                score, time = evaluate_combination(sast, sca, dast, LOC_CHANGED, TIME_BUDGET, RAM_LIMIT)
+                
+                if score > best_score:
+                    best_score = score
+                    best_combo = (sast, sca, dast)
+                    best_time = time
 
-    # Chạy thuật toán kiểm tra cho từng tầng
-    for category in ['SAST', 'SCA', 'DAST']:
-        if category in target_layers:
-            selected, t, s = solve_knapsack(data[category], layer_budget, LOC_CHANGED)
-            if not selected:
-                results[category] = f"{category.lower()}_skip"
-                summary_table.append([category, "SKIP (LOW BUDGET)", 0, 0])
-            else:
-                best_tool = max(selected, key=lambda x: x['v_score'])
-                results[category] = best_tool['id']
-                summary_table.append([category, best_tool['id'], round(best_tool['actual_time'], 2), best_tool['v_score']])
-        else:
-            results[category] = f"{category.lower()}_skip"
-            summary_table.append([category, "SKIPPED BY USER", 0, 0])
+    # 5. ĐIỀU PHỐI KẾT QUẢ RA PIPELINE
+    sast_choice = best_combo[0]['id'] if best_combo[0]['id'] != 'skip' else 'sast_skip'
+    sca_choice = best_combo[1]['id'] if best_combo[1]['id'] != 'skip' else 'sca_skip'
+    dast_choice = best_combo[2]['id'] if best_combo[2]['id'] != 'skip' else 'dast_skip'
 
-    # IN BÁO CÁO TRÌNH BÀY
-    print("="*60)
-    print(f"SMART PIPELINE DECISION REPORT (DYNAMIC MODE)")
-    print("="*60)
-    print(f"Input: LOC = {LOC_CHANGED} | Budget = {TIME_BUDGET}s | Target = {', '.join(target_layers)}")
-    print("-" * 60)
-    print(f"{'LAYER':<10} | {'SELECTED TOOL':<20} | {'EST. TIME':<10} | {'SCORE'}")
-    print("-" * 60)
-    total_est_time = 0
-    total_est_score = 0
-    for row in summary_table:
-        print(f"{row[0]:<10} | {row[1]:<20} | {row[2]:<10} | {row[3]}")
-        total_est_time += row[2]
-        total_est_score += row[3]
-    print("-" * 60)
-    print(f"TOTAL: Time = {round(total_est_time, 2)}s / {TIME_BUDGET}s | Score = {total_est_score}")
-    print("=" * 60)
+    # In Log Báo cáo để kỹ sư Audit trên GitHub Actions
+    print("="*65)
+    print("🚀 KẾT QUẢ QUY HOẠCH TOÀN CỤC (ILP ENGINE)")
+    print(f"Ngân sách: {TIME_BUDGET}s | Quy mô: {LOC_CHANGED} LOC | Max RAM: {RAM_LIMIT}MB")
+    print("-" * 65)
+    print(f"SAST : {best_combo[0].get('name'):<25} (Điểm F1: {best_combo[0].get('f1_score')}) | RAM: {best_combo[0].get('peak_ram_mb')}MB")
+    print(f"SCA  : {best_combo[1].get('name'):<25} (Điểm F1: {best_combo[1].get('f1_score')}) | RAM: {best_combo[1].get('peak_ram_mb')}MB")
+    print(f"DAST : {best_combo[2].get('name'):<25} (Điểm F1: {best_combo[2].get('f1_score')}) | RAM: {best_combo[2].get('peak_ram_mb')}MB")
+    print("-" * 65)
+    print(f">> Tổng điểm tối ưu: {round(best_score, 2)} / 300")
+    print(f">> Tổng thời gian dự tính: {round(best_time, 2)}s")
+    print("="*65)
 
-    # Xuất kết quả ra GitHub Output
-    github_output = os.environ.get('GITHUB_OUTPUT')
-    if github_output:
-        with open(github_output, 'a') as f:
-            f.write(f"sast_choice={results['SAST']}\n")
-            f.write(f"sca_choice={results['SCA']}\n")
-            f.write(f"dast_choice={results['DAST']}\n")
+    # Đẩy biến ra cho hệ thống Runner của GitHub đọc
+    out_file = os.environ.get('GITHUB_OUTPUT')
+    if out_file:
+        with open(out_file, 'a') as f:
+            f.write(f"sast_choice={sast_choice}\n")
+            f.write(f"sca_choice={sca_choice}\n")
+            f.write(f"dast_choice={dast_choice}\n")
 
 if __name__ == "__main__":
     main()

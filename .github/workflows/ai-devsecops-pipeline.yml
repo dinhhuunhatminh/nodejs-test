@@ -9,10 +9,9 @@ on:
     inputs:
       selected_layers:
         description: 'Chọn các lớp bảo mật (VD: SAST,SCA,DAST)'
-        required: false #true
+        required: false
         default: 'SAST,SCA,DAST'
         type: string
-        #THÊM 2 INPUT MỚI ĐỂ NHẬN LỆNH TỪ WEB 
       ai_prompt_type:
         description: 'Kịch bản AI (default | focus_vuln | explain_detail)'
         required: false
@@ -37,7 +36,6 @@ jobs:
   brain_optimizer:
     runs-on: ubuntu-latest
     outputs:
-      # Lấy trực tiếp từ bước think (đã được xử lý ghi đè bên dưới)
       sast_choice: ${{ steps.think.outputs.sast_choice }}
       sca_choice: ${{ steps.think.outputs.sca_choice }}
       dast_choice: ${{ steps.think.outputs.dast_choice }}
@@ -60,14 +58,11 @@ jobs:
         id: think
         env:
           TIME_BUDGET: 5400
+          RAM_LIMIT: 4096
           LOC_CHANGED: ${{ steps.calc_loc.outputs.loc }}
           MONGO_URI: ${{ secrets.MONGO_URI }}
           SELECTED_LAYERS: ${{ github.event.inputs.selected_layers || 'SAST,SCA,DAST' }}
         run: |
-          # 1. Cho AI chạy toán tối ưu bình thường
-          python dp_optimizer_2.py
-          
-          run: |
           # 1. Cho AI chạy toán tối ưu bình thường
           python dp_optimizer_2.py
           
@@ -122,7 +117,7 @@ jobs:
 
           elif [ "$CHOICE" == "sonar_deep" ]; then
             docker run --rm -v "$(pwd):/usr/src" sonarsource/sonar-scanner-cli >/dev/null 2>&1 || true
-            ISSUES=0 # Sonar không xuất JSON local
+            ISSUES=0 
 
           elif [ "$CHOICE" == "codeql_full" ]; then
             wget -q https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
@@ -131,7 +126,6 @@ jobs:
             ./codeql/codeql database analyze db javascript-security-extended.qls --format=sarif-latest --output=report.sarif >/dev/null 2>&1 || true
             if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' report.sarif 2>/dev/null || echo 0); fi
 
-          # ====== CÁC CÔNG CỤ SAST MỚI ======
           elif [ "$CHOICE" == "gitleaks_fast" ]; then
             wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
             tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
@@ -139,7 +133,6 @@ jobs:
             if [ -s report.json ]; then ISSUES=$(jq 'length' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "spotbugs_java" ]; then
-            # SpotBugs phân tích bytecode Java. Dùng docker image chuẩn của SpotBugs.
             docker run --rm -v "$(pwd):/workspace" spotbugs/spotbugs:latest -textui -sarif -output /workspace/report.sarif /workspace >/dev/null 2>&1 || true
             if [ -s report.sarif ]; then ISSUES=$(jq '[.runs[0].results[]? | select(.level == "error" or .level == "warning")] | length' report.sarif 2>/dev/null || echo 0); fi
 
@@ -166,7 +159,6 @@ jobs:
           name: sast-report
           path: report.*
           retention-days: 1
-
 
   run_sca:
     needs: [brain_optimizer]
@@ -209,7 +201,6 @@ jobs:
             snyk test --all-projects --severity-threshold=high --json > report.json 2>/dev/null || true
             if [ -f report.json ]; then ISSUES=$(jq 'if type == "array" then [.[].uniqueCount] | add else .uniqueCount end' report.json 2>/dev/null || echo 0); fi
 
-          # ====== CÁC CÔNG CỤ SCA MỚI ======
           elif [ "$CHOICE" == "grype_fast" ]; then
             curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin >/dev/null 2>&1
             grype . -o json > report.json 2>/dev/null || true
@@ -239,7 +230,6 @@ jobs:
           name: sca-report
           path: report.*
           retention-days: 1
-
 
   run_dast:
     needs: [brain_optimizer]
@@ -286,7 +276,6 @@ jobs:
             docker run --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py -t http://localhost:5006 -J report.json >/dev/null 2>&1 || true
             if [ -s report.json ]; then ISSUES=$(jq '[.site[].alerts[]? | select(.riskcode == "3") | .count | tonumber] | add // 0' report.json 2>/dev/null || echo 0); fi
 
-          # ====== CÁC CÔNG CỤ DAST MỚI (ĐÃ FIX URL) ======
           elif [ "$CHOICE" == "ffuf_fuzzer" ]; then
             wget -q https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_amd64.tar.gz || true
             tar -xzf ffuf_2.1.0_linux_amd64.tar.gz || true
@@ -295,11 +284,9 @@ jobs:
             if [ -s report.json ]; then ISSUES=$(jq '.results | length' report.json 2>/dev/null || echo 0); fi
 
           elif [ "$CHOICE" == "kiterunner_api" ]; then
-            # ĐÃ FIX: Tên file chính xác của kiterunner 1.0.2
             wget -q https://github.com/assetnote/kiterunner/releases/download/v1.0.2/kiterunner_1.0.2_linux_amd64.tar.gz || true
             tar -xzf kiterunner_1.0.2_linux_amd64.tar.gz || true
             wget -q https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/api/api-endpoints.txt || true
-            # Sau khi giải nén, file thực thi sẽ mang tên là "kr"
             ./kr scan http://localhost:5006 -w api-endpoints.txt -o json > report.json 2>/dev/null || true
             if [ -s report.json ]; then ISSUES=$(jq '[.[]? | select(.status == 200)] | length' report.json 2>/dev/null || echo 0); fi
 
@@ -355,7 +342,7 @@ jobs:
         continue-on-error: true
 
       - name: Cài đặt thư viện Python cho AI
-        run: pip install -q google-genai pymongo
+        run: pip install -q google-genai pymongo certifi
 
       - name: AI Phân tích Lỗ hổng và Phản hồi
         env:
@@ -364,7 +351,6 @@ jobs:
           SAST_TOOL: ${{ needs.brain_optimizer.outputs.sast_choice }}
           SCA_TOOL: ${{ needs.brain_optimizer.outputs.sca_choice }}
           DAST_TOOL: ${{ needs.brain_optimizer.outputs.dast_choice }}
-          # Truyền kịch bản AI vào môi trường Python
           AI_PROMPT_TYPE: ${{ github.event.inputs.ai_prompt_type || 'default' }}
         run: |
           python - << 'EOF'
@@ -443,11 +429,9 @@ jobs:
               print(response.text)
               print('===========================================================')
               
-              # TẠO FILE AI_REVIEW.MD ĐỂ ĐĂNG LÊN PULL REQUEST
               with open('ai_review.md', 'w', encoding='utf-8') as f:
                   f.write(response.text)
               
-              # THU THẬP THÔNG TIN CÔNG CỤ & REPO
               repo_name = os.environ.get("GITHUB_REPOSITORY", "unknown-repo").split('/')[-1]
               commit_sha = os.environ.get("GITHUB_SHA", "unknown-commit")[:7]
               
@@ -455,7 +439,6 @@ jobs:
               sca_tool = os.environ.get("SCA_TOOL", "N/A")
               dast_tool = os.environ.get("DAST_TOOL", "N/A")
 
-              # ĐÓNG GÓI CHUẨN FORM CHO REACT APP.JSX ĐỌC
               report_data = {
                   "repo_name": repo_name,
                   "commit_sha": commit_sha,
@@ -466,8 +449,7 @@ jobs:
                   "markdown_content": response.text
               }
 
-              # GHI VÀO ĐÚNG BẢNG 'ai_reviews' MÀ BACKEND ĐANG LẮNG NGHE
-              mongo_client = pymongo.MongoClient(os.environ['MONGO_URI'])
+              mongo_client = pymongo.MongoClient(os.environ['MONGO_URI'], tlsAllowInvalidCertificates=True)
               db = mongo_client['devsecops']
               collection = db['ai_reviews']
               collection.insert_one(report_data)
@@ -492,7 +474,6 @@ jobs:
           fi
           
   feedback_and_learn:
-    # Cập nhật danh sách needs đầy đủ:
     needs: [brain_optimizer, run_sast, run_sca, run_dast, ai_reporter]
     runs-on: ubuntu-latest
     if: always() 
@@ -502,32 +483,30 @@ jobs:
         with:
           python-version: '3.10'
       - name: Cài MongoDB
-        run: pip install -q pymongo
+        run: pip install -q pymongo certifi
       - name: Cập nhật Feedback
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
           S_CHOICE="${{ needs.brain_optimizer.outputs.sast_choice }}"
           S_DUR="${{ needs.run_sast.outputs.duration }}"
-          S_SCORE="${{ needs.run_sast.outputs.issues }}"
 
           C_CHOICE="${{ needs.brain_optimizer.outputs.sca_choice }}"
           C_DUR="${{ needs.run_sca.outputs.duration }}"
-          C_SCORE="${{ needs.run_sca.outputs.issues }}"
 
           D_CHOICE="${{ needs.brain_optimizer.outputs.dast_choice }}"
           D_DUR="${{ needs.run_dast.outputs.duration }}"
-          D_SCORE="${{ needs.run_dast.outputs.issues }}"
 
-          if [ -n "$S_CHOICE" ] && [ "$S_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ] && [ -n "$S_SCORE" ]; then
-            python feedback_updater.py --cat SAST --id "$S_CHOICE" --time "$S_DUR" --score "$S_SCORE" > /dev/null 2>&1 || true
+          if [ -n "$S_CHOICE" ] && [ "$S_CHOICE" != "sast_skip" ] && [ -n "$S_DUR" ]; then
+            python feedback_updater.py --cat SAST --id "$S_CHOICE" --time "$S_DUR" --ram 512 > /dev/null 2>&1 || true
           fi
-          if [ -n "$C_CHOICE" ] && [ "$C_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ] && [ -n "$C_SCORE" ]; then
-            python feedback_updater.py --cat SCA --id "$C_CHOICE" --time "$C_DUR" --score "$C_SCORE" > /dev/null 2>&1 || true
+          if [ -n "$C_CHOICE" ] && [ "$C_CHOICE" != "sca_skip" ] && [ -n "$C_DUR" ]; then
+            python feedback_updater.py --cat SCA --id "$C_CHOICE" --time "$C_DUR" --ram 512 > /dev/null 2>&1 || true
           fi
-          if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ] && [ -n "$D_SCORE" ]; then
-            python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --score "$D_SCORE" > /dev/null 2>&1 || true
+          if [ -n "$D_CHOICE" ] && [ "$D_CHOICE" != "dast_skip" ] && [ -n "$D_DUR" ]; then
+            python feedback_updater.py --cat DAST --id "$D_CHOICE" --time "$D_DUR" --ram 512 > /dev/null 2>&1 || true
           fi
+          
       - name: Export Latest Metadata to File
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
@@ -535,17 +514,16 @@ jobs:
           python -c "
           import pymongo, os, json
           try:
-              client = pymongo.MongoClient(os.environ['MONGO_URI'])
+              client = pymongo.MongoClient(os.environ['MONGO_URI'], tlsAllowInvalidCertificates=True)
               db = client['devsecops']
               collection = db['tools']
-              data = collection.find_one()
-              if data and '_id' in data:
-                  del data['_id']
+              # Đã sửa lại để query xuất đủ 25 tools với định dạng mới nhất
+              data = list(collection.find({}, {'_id': 0}))
               with open('latest_metadata.json', 'w', encoding='utf-8') as f:
                   json.dump(data, f, indent=4, ensure_ascii=False)
-              print('Export successful')
+              print('✅ Export successful.')
           except Exception as e:
-              print(f'Export failed: {e}')
+              print(f'❌ Export failed: {e}')
           "
       - name: Upload Metadata Artifact
         uses: actions/upload-artifact@v4
