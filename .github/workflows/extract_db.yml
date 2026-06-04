@@ -1,0 +1,57 @@
+name: DB Migration - Trích xuất dữ liệu cũ
+on:
+  workflow_dispatch: # Cho phép bạn bấm nút chạy thủ công trên web GitHub
+
+jobs:
+  extract_data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Cài đặt MongoDB Driver
+        run: pip install -q pymongo certifi
+        
+      - name: Chạy Script trích xuất và biến đổi
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          # Viết trực tiếp script Python vào runner để chạy luôn
+          python -c "
+          import pymongo, json, os
+          try:
+              client = pymongo.MongoClient(os.environ['MONGO_URI'], tlsAllowInvalidCertificates=True)
+              db = client['devsecops']
+              old_data = db['tools'].find_one()
+              
+              new_flat_tools = []
+              for cat in ['SAST', 'SCA', 'DAST']:
+                  if cat in old_data:
+                      for tool in old_data[cat]:
+                          new_tool = {
+                              'id': tool.get('id'),
+                              'name': tool.get('name', 'Unknown Tool'),
+                              'category': cat,
+                              'languages': ['javascript', 'python'], # Mặc định để bạn sửa
+                              'base_time': tool.get('base_time', 10.0),
+                              'time_per_loc': tool.get('time_per_loc', 0.01),
+                              'peak_ram_mb': 512, # Cấp sẵn 512MB
+                              'f1_score': round(tool.get('v_score', 80) / 100, 2),
+                              'total_runs': 1
+                          }
+                          new_flat_tools.append(new_tool)
+                          
+              with open('tools_to_edit.json', 'w', encoding='utf-8') as f:
+                  json.dump(new_flat_tools, f, ensure_ascii=False, indent=4)
+              print('✅ Đã tạo xong file tools_to_edit.json')
+          except Exception as e:
+              print('❌ Lỗi:', e)
+          "
+          
+      - name: Gửi file JSON ra ngoài để bạn tải về
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-tools-json
+          path: tools_to_edit.json
+          retention-days: 1
